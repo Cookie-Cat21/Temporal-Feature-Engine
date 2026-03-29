@@ -66,10 +66,17 @@ class GraphSyncSink(KeyedProcessFunction):
         with self.driver.session() as session:
             cypher = """
             MERGE (u:User {user_id: $uid})
+            SET u.governance_status = $status, u.violations = $violations
             MERGE (m:Merchant {merchant_name: $merchant})
             CREATE (u)-[:TRANSACTED_WITH {amount: $amount, ts: $ts}]->(m)
             """
-            session.run(cypher, uid=enriched['user_id'], merchant=enriched['merchant'], amount=enriched['amount'], ts=enriched['processed_at'])
+            session.run(cypher, 
+                        uid=enriched['user_id'], 
+                        status=enriched.get('governance_status', 'OK'),
+                        violations=json.dumps(enriched.get('violations', [])),
+                        merchant=enriched['merchant'], 
+                        amount=enriched['amount'], 
+                        ts=enriched['processed_at'])
         yield enriched
 
 class ContractEnforcer(KeyedProcessFunction):

@@ -1,36 +1,37 @@
 import { NextResponse } from 'next/server';
+import neo4j from 'neo4j-driver';
 
-// Live simulation engine - generates evolving fraud ring data
-// When Memgraph is online, swap this for the neo4j-driver queries
-
-const RING_TEMPLATES = [
-  { id: "RING-104", baseSize: 12, status: "active", baseRisk: 92 },
-  { id: "RING-112", baseSize: 7, status: "active", baseRisk: 78 },
-  { id: "RING-088", baseSize: 5, status: "investigating", baseRisk: 65 },
-  { id: "RING-201", baseSize: 3, status: "active", baseRisk: 88 },
-  { id: "RING-045", baseSize: 9, status: "neutralized", baseRisk: 12 },
-];
-
-function generateLiveRings() {
-  const now = Date.now();
-  return RING_TEMPLATES.map((ring) => {
-    // Simulate organic growth: size fluctuates slightly over time
-    const drift = Math.sin(now / 10000 + parseInt(ring.id.replace(/\D/g, ''))) * 2;
-    const size = Math.max(2, Math.round(ring.baseSize + drift));
-    
-    // Risk score pulses realistically
-    const riskPulse = Math.sin(now / 5000 + parseInt(ring.id.replace(/\D/g, ''))) * 5;
-    const risk_score = Math.min(99, Math.max(5, Math.round(ring.baseRisk + riskPulse)));
-
-    return {
-      id: ring.id,
-      size,
-      status: ring.status,
-      risk_score,
-    };
-  });
-}
+const driver = neo4j.driver(
+  process.env.MEMGRAPH_URI || 'bolt://localhost:7687',
+  neo4j.auth.basic('', '')
+);
 
 export async function GET() {
-  return NextResponse.json(generateLiveRings());
+  const session = driver.session();
+  try {
+    // Query Memgraph for identified fraud rings
+    const result = await session.run(`
+      MATCH (u:User)
+      WHERE u.fraud_ring_id IS NOT NULL
+      RETURN 
+        u.fraud_ring_id as id, 
+        count(u) as size,
+        'active' as status,
+        90 as risk_score
+      LIMIT 10
+    `);
+
+    const rings = result.records.map((record) => ({
+      id: `RING-${record.get('id')}`,
+      size: record.get('size').toNumber(),
+      status: record.get('status'),
+      risk_score: record.get('risk_score')
+    }));
+
+    return NextResponse.json(rings);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  } finally {
+    await session.close();
+  }
 }

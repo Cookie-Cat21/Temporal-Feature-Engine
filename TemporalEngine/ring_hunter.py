@@ -37,7 +37,22 @@ class RingHunter:
             count = 0
             for record in results:
                 count += 1
-                print(f"IDENTIFIED: Ring {record['component_id']} (Size: {record['ring_size']})")
+                ring_id = record['component_id']
+                print(f"IDENTIFIED: Ring {ring_id} (Size: {record['ring_size']})")
+                
+                # --- NEW: Autonomous Agentic Trigger ---
+                from investigator_agent import app
+                print(f"TRIGGERING: Autonomous Agent Investigation for Ring {ring_id}...")
+                try:
+                    # In a real scenario, we'd pick a representative user from the cluster
+                    representative_user = f"user_{ring_id}" 
+                    app.invoke({
+                        "user_id": representative_user, 
+                        "transaction_amount": 1000.0, # Target high-value analysis
+                        "governance_status": "INVESTIGATE"
+                    })
+                except Exception as e:
+                    print(f"AGENT ERROR: Failed to invoke investigator for ring {ring_id}: {e}")
             
             if count == 0:
                 print("No suspect clusters identified in the current graph.")

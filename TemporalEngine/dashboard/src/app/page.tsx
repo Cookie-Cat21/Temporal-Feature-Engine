@@ -12,16 +12,12 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 export default function Home() {
   const { data: rings_raw } = useSWR('/api/data/rings', fetcher, { refreshInterval: 2000 });
   const { data: transactions_raw } = useSWR('/api/data/transactions', fetcher, { refreshInterval: 1000 });
+  const { data: steps_raw } = useSWR('/api/data/agent', fetcher, { refreshInterval: 1000 });
 
   const rings = Array.isArray(rings_raw) ? rings_raw : [];
   const transactions = Array.isArray(transactions_raw) ? transactions_raw : [];
-
-  // Mock data for Reasoning as Flink/LangGraph are Python-based
-  const steps = [
-    { id: "1", node: "Gather Context", status: "completed" as const, message: "Querying Memgraph for transaction history... [FOUND: 4 records]" },
-    { id: "2", node: "Network Analysis", status: "completed" as const, message: "Scanning for shared IP/Device rings... [RESULT: Clear]" },
-    { id: "3", node: "Security Audit", status: "running" as const, message: "Analyzing contract violations in 'merchant_notes' field..." },
-    { id: "4", node: "Reason & Decide", status: "pending" as const, message: "Synthesizing final risk score and action." }
+  const steps = Array.isArray(steps_raw) ? steps_raw : [
+    { id: "idle", node: "Awaiting Trigger", status: "pending" as const, message: "Monitoring system for autonomous investigation triggers..." }
   ];
 
   return (
