@@ -124,6 +124,31 @@ services:
     image: memgraph/lab:latest
     container_name: temporal_memgraph_lab
     ports:
-      - "3001:3001"  # Graph Visualisation UI
+      - "3002:3000"  # Graph Visualisation UI (Moved to 3002 to avoid clash with Dashboard)
     depends_on:
       - memgraph
+
+  ring_hunter:
+    build:
+      context: .
+      dockerfile: Dockerfile.hunter
+    container_name: temporal_ring_hunter
+    environment:
+      - MEMGRAPH_URI=bolt://memgraph:7687
+      - CHECK_INTERVAL=15
+    depends_on:
+      - memgraph
+
+  processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.processor
+    container_name: temporal_processor
+    environment:
+      - KAFKA_BROKER=redpanda:9092
+      - MEMGRAPH_URI=bolt://memgraph:7687
+      - REDIS_HOST=redis
+    depends_on:
+      - redpanda
+      - memgraph
+      - redis

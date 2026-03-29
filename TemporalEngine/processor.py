@@ -9,10 +9,13 @@ from pyflink.datastream.connectors.kafka import KafkaSource, KafkaOffsetsInitial
 from pyflink.datastream.functions import KeyedProcessFunction, RuntimeContext
 from pyflink.table import StreamTableEnvironment
 from neo4j import GraphDatabase
+from pii_shield import process_payload
 
-# --- 1. Project Config ---
-JAR_PATH = "lib/iceberg-flink-runtime-1.18-1.5.2.jar"
-KAFKA_BROKER = "redpanda:9092"
+# --- 1. Project Config (Environment Priority) ---
+JAR_PATH = os.getenv("JAR_PATH", "lib/iceberg-flink-runtime-1.18-1.5.2.jar")
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "redpanda:9092")
+MEMGRAPH_URI = os.getenv("MEMGRAPH_URI", "bolt://memgraph:7687")
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 
 class TemporalJoinFunction(KeyedProcessFunction):
     def __init__(self):
@@ -43,7 +46,7 @@ class RedisFeatureSink(KeyedProcessFunction):
         self.r = None
 
     def open(self, runtime_context: RuntimeContext):
-        self.r = redis.Redis(host='redis', port=6379, db=0)
+        self.r = redis.Redis(host=REDIS_HOST, port=6379, db=0)
 
     def process_element(self, enriched, ctx: 'KeyedProcessFunction.Context'):
         user_id = enriched['user_id']
@@ -57,7 +60,7 @@ class GraphSyncSink(KeyedProcessFunction):
 
     def open(self, runtime_context: RuntimeContext):
         # 'memgraph' is the service name in docker-compose
-        self.driver = GraphDatabase.driver("bolt://memgraph:7687", auth=("", ""))
+        self.driver = GraphDatabase.driver(MEMGRAPH_URI, auth=("", ""))
 
     def process_element(self, enriched, ctx: 'KeyedProcessFunction.Context'):
         with self.driver.session() as session:
@@ -68,6 +71,43 @@ class GraphSyncSink(KeyedProcessFunction):
             """
             session.run(cypher, uid=enriched['user_id'], merchant=enriched['merchant'], amount=enriched['amount'], ts=enriched['processed_at'])
         yield enriched
+
+class ContractEnforcer(KeyedProcessFunction):
+    def __init__(self):
+        self.contract = None
+
+    def open(self, runtime_context: RuntimeContext):
+        with open("contract.json", "r") as f:
+            self.contract = json.load(f)
+
+    def process_element(self, enriched, ctx: 'KeyedProcessFunction.Context'):
+        allowed = set(self.contract.get("allowed_fields", []))
+        current_keys = set(enriched.keys())
+        
+        violations = current_keys - allowed
+        if violations:
+            # Tag and Alert (not blocking for now)
+            enriched["governance_status"] = "VIOLATION"
+            enriched["violations"] = list(violations)
+            print(f"ALERT: Contract violation for user {enriched['user_id']}: {violations}")
+        else:
+            enriched["governance_status"] = "OK"
+            
+        yield enriched
+
+class PIIShieldOperator(KeyedProcessFunction):
+    def __init__(self):
+        self.sensitive_fields = None
+
+    def open(self, runtime_context: RuntimeContext):
+        with open("contract.json", "r") as f:
+            contract = json.load(f)
+            self.sensitive_fields = contract.get("sensitive_fields", [])
+
+    def process_element(self, enriched, ctx: 'KeyedProcessFunction.Context'):
+        # Mask sensitive fields
+        masked = process_payload(enriched, self.sensitive_fields)
+        yield masked
 
 def run_temporal_engine():
     # --- 2. Setup Environment ---
@@ -118,15 +158,18 @@ def run_temporal_engine():
     # --- 4. The Core Logic: Connected Streams ---
     enriched_stream = tx_stream.union(profile_stream) \
         .key_by(lambda x: x[1]['user_id']) \
-        .process(TemporalJoinFunction(), output_type=Types.MAP(Types.STRING(), Types.STRING())) \
-        .process(RedisFeatureSink(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
+        .process(TemporalJoinFunction(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
 
-    # --- 5. Sinks ---
+    # --- 5. The Sovereignty Guard (PII Masking & Contracts) ---
+    governed_stream = enriched_stream.process(ContractEnforcer(), output_type=Types.MAP(Types.STRING(), Types.STRING())) \
+        .process(PIIShieldOperator(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
+
+    # --- 6. Sinks ---
     # Sync to Redis for real-time features
-    enriched_stream = full_stream.process(RedisFeatureSink(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
+    final_stream = governed_stream.process(RedisFeatureSink(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
     
     # Sync to Memgraph for Graph Reasoning
-    final_stream = enriched_stream.process(GraphSyncSink(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
+    final_stream = final_stream.process(GraphSyncSink(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
 
     # Print results
     final_stream.print()

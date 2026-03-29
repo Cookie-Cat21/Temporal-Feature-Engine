@@ -1,0 +1,21 @@
+FROM flink:1.18.1-scala_2.12
+
+# Install Python and dependencies
+RUN apt-get update -y && \
+    apt-get install -y python3 python3-pip python3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install PyFlink and project dependencies
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir apache-flink==1.18.1
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+WORKDIR /opt/flink/usrlib
+COPY processor.py pii_shield.py contract.json ./
+
+# Environment configuration
+ENV KAFKA_BROKER=redpanda:9092
+ENV MEMGRAPH_URI=bolt://memgraph:7687
+ENV REDIS_HOST=redis
+
+CMD ["flink", "run", "--python", "processor.py"]

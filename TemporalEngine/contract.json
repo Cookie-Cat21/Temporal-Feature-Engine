@@ -1,0 +1,6 @@
+{
+    "version": "1.0",
+    "allowed_fields": ["user_id", "amount", "merchant", "processed_at", "profile_credit_score", "profile_status", "notes"],
+    "sensitive_fields": ["merchant", "notes"],
+    "strict_mode": false
+}

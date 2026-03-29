@@ -8,3 +8,6 @@ langchain
 langchain-openai
 neo4j
 python-dotenv
+presidio-analyzer
+presidio-anonymizer
+spacy

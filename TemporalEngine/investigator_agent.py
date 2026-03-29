@@ -14,6 +14,8 @@ class AgentState(TypedDict):
     transaction_amount: float
     context: str
     decision: str
+    governance_status: str
+    violations: List[str]
 
 # --- 2. Tooling (Graph Queries) ---
 URI = "bolt://localhost:7687"
@@ -68,15 +70,44 @@ def reason_and_decide(state: AgentState):
     
     return {"decision": decision, "messages": [response]}
 
+def security_audit(state: AgentState):
+    """Analyze contract violations for malicious intent."""
+    violations = state.get("violations", [])
+    prompt = f"""
+    The Data Sovereignty Guard has detected the following contract violations:
+    {violations}
+    
+    User: {state['user_id']}
+    
+    Is this a simple schema drift or a potential data exfiltration attempt?
+    Provide a risk score (0-10) and a recommendation.
+    """
+    response = model.invoke([HumanMessage(content=prompt)])
+    return {"context": state['context'] + f" | Security Audit: {response.content}", "messages": [response]}
+
 # --- 4. Define the Graph ---
 workflow = StateGraph(AgentState)
 
 workflow.add_node("gather_context", gather_context)
 workflow.add_node("network_analysis", network_analysis)
+workflow.add_node("security_audit", security_audit)
 workflow.add_node("reason_and_decide", reason_and_decide)
 
+def route_investigation(state: AgentState):
+    if state.get("governance_status") == "VIOLATION":
+        return "security_audit"
+    return "network_analysis"
+
 workflow.set_entry_point("gather_context")
-workflow.add_edge("gather_context", "network_analysis")
+workflow.add_conditional_edges(
+    "gather_context",
+    route_investigation,
+    {
+        "security_audit": "security_audit",
+        "network_analysis": "network_analysis"
+    }
+)
+workflow.add_edge("security_audit", "reason_and_decide")
 workflow.add_edge("network_analysis", "reason_and_decide")
 workflow.add_edge("reason_and_decide", END)
 
