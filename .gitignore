@@ -1,8 +1,8 @@
-# Temporal Engine Exclusions
-TemporalEngine/lib/
-TemporalEngine/__pycache__/
-TemporalEngine/*.log
-TemporalEngine/.ipynb_checkpoints/
+# Temporal Engine (Root)
+lib/
+__pycache__/
+*.log
+.ipynb_checkpoints/
 .venv/
 node_modules/
 *.pyc
