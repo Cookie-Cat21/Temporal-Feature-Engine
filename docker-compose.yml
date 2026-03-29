@@ -111,3 +111,19 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
     depends_on:
       - prometheus
+
+  memgraph:
+    image: memgraph/memgraph-mage:latest
+    container_name: temporal_memgraph
+    ports:
+      - "7687:7687"  # Bolt protocol
+      - "7444:7444"  # Webhook
+    command: ["--log-level=TRACE"]
+
+  memgraph_lab:
+    image: memgraph/lab:latest
+    container_name: temporal_memgraph_lab
+    ports:
+      - "3001:3001"  # Graph Visualisation UI
+    depends_on:
+      - memgraph

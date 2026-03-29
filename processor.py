@@ -8,6 +8,7 @@ from pyflink.datastream import StreamExecutionEnvironment, RuntimeExecutionMode
 from pyflink.datastream.connectors.kafka import KafkaSource, KafkaOffsetsInitializer
 from pyflink.datastream.functions import KeyedProcessFunction, RuntimeContext
 from pyflink.table import StreamTableEnvironment
+from neo4j import GraphDatabase
 
 # --- 1. Project Config ---
 JAR_PATH = "lib/iceberg-flink-runtime-1.18-1.5.2.jar"
@@ -48,6 +49,24 @@ class RedisFeatureSink(KeyedProcessFunction):
         user_id = enriched['user_id']
         self.r.set(f"feature:user:{user_id}:credit_score", enriched['profile_credit_score'])
         self.r.set(f"feature:user:{user_id}:status", enriched['profile_status'])
+        yield enriched
+
+class GraphSyncSink(KeyedProcessFunction):
+    def __init__(self):
+        self.driver = None
+
+    def open(self, runtime_context: RuntimeContext):
+        # 'memgraph' is the service name in docker-compose
+        self.driver = GraphDatabase.driver("bolt://memgraph:7687", auth=("", ""))
+
+    def process_element(self, enriched, ctx: 'KeyedProcessFunction.Context'):
+        with self.driver.session() as session:
+            cypher = """
+            MERGE (u:User {user_id: $uid})
+            MERGE (m:Merchant {merchant_name: $merchant})
+            CREATE (u)-[:TRANSACTED_WITH {amount: $amount, ts: $ts}]->(m)
+            """
+            session.run(cypher, uid=enriched['user_id'], merchant=enriched['merchant'], amount=enriched['amount'], ts=enriched['processed_at'])
         yield enriched
 
 def run_temporal_engine():
@@ -103,7 +122,14 @@ def run_temporal_engine():
         .process(RedisFeatureSink(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
 
     # --- 5. Sinks ---
-    enriched_stream.print()
+    # Sync to Redis for real-time features
+    enriched_stream = full_stream.process(RedisFeatureSink(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
+    
+    # Sync to Memgraph for Graph Reasoning
+    final_stream = enriched_stream.process(GraphSyncSink(), output_type=Types.MAP(Types.STRING(), Types.STRING()))
+
+    # Print results
+    final_stream.print()
     
     print("Submitting Flink Job...")
     env.execute("Temporal Feature Engine")

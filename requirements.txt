@@ -1,6 +1,10 @@
-apache-flink==1.18.1
 faker
 redis
 confluent-kafka
 duckdb
 pyiceberg
+langgraph
+langchain
+langchain-openai
+neo4j
+python-dotenv
