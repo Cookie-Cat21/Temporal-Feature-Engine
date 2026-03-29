@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "CommitGlow",
+  "version": "1.0.0",
+  "description": "Subtle GitHub contribution heatmap overlay for your new tab.",
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": {
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Toggle CommitGlow"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*",
+        "about:blank",
+        "chrome://newtab/*"
+      ],
+      "js": [
+        "lib/github-calendar.min.js",
+        "content.js"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/icon128.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "icons": {
+    "128": "icons/icon128.png"
+  }
+}
