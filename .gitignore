@@ -6,3 +6,4 @@ TemporalEngine/.ipynb_checkpoints/
 .venv/
 node_modules/
 *.pyc
+*.jar
