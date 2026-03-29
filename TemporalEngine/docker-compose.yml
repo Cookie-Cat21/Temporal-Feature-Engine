@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.4
+    container_name: temporal_redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned
+      - --node-id 0
+      - --check=false
+      - --reserve-memory 0M
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --rpc-addr 0.0.0.0:33145
+      - --advertise-rpc-addr redpanda:33145
+    ports:
+      - "19092:19092"
+      - "18082:18082"
+
+  redpanda_console:
+    image: docker.redpanda.com/redpandadata/console:v2.4.3
+    container_name: temporal_console
+    environment:
+      KAFKA_BROKERS: "redpanda:9092"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redpanda
+
+  jobmanager:
+    image: apache/flink:1.18.1-scala_2.12
+    container_name: temporal_jobmanager
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+    volumes:
+      - ./lib:/opt/flink/lib
+
+  taskmanager:
+    image: apache/flink:1.18.1-scala_2.12
+    container_name: temporal_taskmanager
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 2
+    volumes:
+      - ./lib:/opt/flink/lib
+
+  redis:
+    image: redis:alpine
+    container_name: temporal_redis
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: quay.io/minio/minio
+    container_name: temporal_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password
+    command: server /data --console-address ":9001"
+
+  mc:
+    image: minio/mc
+    container_name: temporal_mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set local http://minio:9000 admin password) do echo 'Waiting for MinIO...' && sleep 1; done;
+      /usr/bin/mc mb local/warehouse;
+      exit 0;
+      "

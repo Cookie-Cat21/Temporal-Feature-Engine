@@ -1,0 +1,6 @@
+apache-flink==1.18.1
+faker
+redis
+confluent-kafka
+duckdb
+pyiceberg

@@ -1,46 +1,57 @@
 {
   "manifest_version": 3,
-  "name": "CommitGlow",
-  "version": "1.0.0",
-  "description": "Subtle GitHub contribution heatmap overlay for your new tab.",
+  "name": "CommitGlow: Material Edition",
+  "version": "4.0.0",
+  "description": "Premium New Tab featuring GitHub contributions and Material You design.",
   "permissions": [
-    "storage"
+    "storage",
+    "unlimitedStorage",
+    "bookmarks",
+    "favicon",
+    "search"
   ],
-  "background": {
-    "service_worker": "background.js"
-  },
+  "optional_host_permissions": [
+    "https://www.google.com/complete/search?client=*",
+    "https://duckduckgo.com/ac/?q=*",
+    "https://search.brave.com/api/suggest?q=*",
+    "https://*.wikipedia.org/w/api.php?action=opensearch&search=*"
+  ],
   "action": {
-    "default_icon": {
-      "128": "icons/icon128.png"
-    },
-    "default_title": "Toggle CommitGlow"
+    "default_popup": "options.html",
+    "default_icon": "favicon/icon48.png"
+  },
+  "options_page": "options.html",
+  "chrome_url_overrides": {
+    "newtab": "index.html"
   },
   "content_scripts": [
     {
       "matches": [
-        "http://*/*",
-        "https://*/*",
-        "about:blank",
-        "chrome://newtab/*"
+        "<all_urls>"
       ],
       "js": [
         "lib/github-calendar.min.js",
         "content.js"
       ],
-      "run_at": "document_end"
+      "css": [
+        "lib/github-calendar-responsive.css"
+      ],
+      "run_at": "document_idle",
+      "match_about_blank": true
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": [
-        "icons/icon128.png"
-      ],
       "matches": [
         "<all_urls>"
+      ],
+      "resources": [
+        "favicon/*",
+        "styles.css",
+        "lib/*",
+        "newtab-glow.js"
       ]
     }
   ],
-  "icons": {
-    "128": "icons/icon128.png"
-  }
+  "incognito": "split"
 }

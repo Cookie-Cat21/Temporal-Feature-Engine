@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CommitGlow Test Page</title>
+    <style>
+        body { 
+            background: #0d1117; 
+            color: #c9d1d9; 
+            font-family: sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0;
+            background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=1920');
+            background-size: cover;
+        }
+        .container { text-align: center; background: rgba(0,0,0,0.6); padding: 40px; border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        h1 { color: #238636; margin-bottom: 10px; }
+        p { color: #8b949e; max-width: 400px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌿 Commitment to the Glow</h1>
+        <p>This is a test page for your extension. The widget should appear in the <b>bottom-right corner</b> within seconds.</p>
+        <p style="font-size: 12px; margin-top: 20px;">(If it doesn't appear, refresh this page or check your Options!)</p>
+    </div>
+    <!-- The content script will automatically inject here because it's a web page context -->
+</body>
+</html>
