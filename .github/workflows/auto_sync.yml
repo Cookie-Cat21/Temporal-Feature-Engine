@@ -1,0 +1,21 @@
+name: Auto-Sync Changes
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  auto_commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Git Auto-Commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "auto:sync changes [skip ci]"
+          file_pattern: "**/*"
+          skip_dirty_check: false    
+          skip_fetch: true
