@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
-import Redis from 'ioredis';
+import { getRedis } from '@/lib/redis';
 
-const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: 6379,
-});
+const redis = getRedis();
 
 export async function GET() {
   try {

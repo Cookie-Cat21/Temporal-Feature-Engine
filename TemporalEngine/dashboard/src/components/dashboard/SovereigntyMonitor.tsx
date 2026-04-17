@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { GlassCard } from "../ui/glass-card";
-import { ShieldCheck, ShieldAlert, EyeOff } from "lucide-react";
+import { ShieldCheck, ShieldAlert, EyeOff, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Transaction {
@@ -11,6 +11,7 @@ interface Transaction {
   merchant: string;
   amount: string;
   governance_status: "OK" | "VIOLATION";
+  velocity_flag?: "NORMAL" | "HIGH";
   violations?: string[];
 }
 
@@ -65,8 +66,13 @@ export function SovereigntyMonitor({ transactions }: { transactions: Transaction
               </div>
             </div>
 
-            <div className="flex items-center gap-6">
-               <div className="flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-[10px] font-mono border border-white/5">
+            <div className="flex items-center gap-2">
+              {tx.velocity_flag === "HIGH" && (
+                <div className="flex items-center gap-1 bg-warning/10 border border-warning/20 px-2 py-1 rounded text-[10px] font-mono text-warning">
+                  <Zap size={10} /><span>HIGH</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-[10px] font-mono border border-white/5">
                 <EyeOff size={10} className="text-white/40" />
                 <span className="text-accent">PII MASKED</span>
               </div>

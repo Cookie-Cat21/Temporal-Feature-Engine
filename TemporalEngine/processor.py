@@ -188,6 +188,17 @@ class RedisFeatureSink(KeyedProcessFunction):
             self.r.incr("metrics:velocity_high_total")
         if enriched.get('governance_status') == 'VIOLATION':
             self.r.incr("metrics:violations_total")
+        # Push fraud alerts to Redis list for the dashboard AlertFeed
+        if enriched.get('velocity_flag') == 'HIGH' or enriched.get('governance_status') == 'VIOLATION':
+            alert = json.dumps({
+                'user_id':    uid,
+                'alert_type': 'VELOCITY' if enriched.get('velocity_flag') == 'HIGH' else 'GOVERNANCE',
+                'amount':     enriched.get('amount', '0'),
+                'merchant':   enriched.get('merchant', ''),
+                'ts':         time.time(),
+            })
+            self.r.lpush('fraud:alerts', alert)
+            self.r.ltrim('fraud:alerts', 0, 49)   # keep last 50
         yield enriched
 
 
@@ -202,7 +213,8 @@ class GraphSyncSink(KeyedProcessFunction):
             cypher = """
             MERGE (u:User {user_id: $uid})
               SET u.governance_status = $gov_status,
-                  u.violations        = $violations
+                  u.violations        = $violations,
+                  u.velocity_flag     = $velocity_flag
 
             MERGE (m:Merchant {merchant_name: $merchant})
             CREATE (u)-[:TRANSACTED_WITH {amount: $amount, ts: $ts}]->(m)
@@ -219,9 +231,10 @@ class GraphSyncSink(KeyedProcessFunction):
             """
             session.run(
                 cypher,
-                uid        = enriched['user_id'],
-                gov_status = enriched.get('governance_status', 'OK'),
-                violations = json.dumps(enriched.get('violations', [])),
+                uid          = enriched['user_id'],
+                gov_status   = enriched.get('governance_status', 'OK'),
+                violations   = json.dumps(enriched.get('violations', [])),
+                velocity_flag = enriched.get('velocity_flag', 'NORMAL'),
                 merchant   = enriched['merchant'],
                 amount     = enriched['amount'],
                 ts         = enriched['processed_at'],

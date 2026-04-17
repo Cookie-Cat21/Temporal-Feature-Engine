@@ -12,11 +12,12 @@ export async function GET() {
     // Query Memgraph for the most recent transaction relationships
     const result = await session.run(`
       MATCH (u:User)-[r:TRANSACTED_WITH]->(m:Merchant)
-      RETURN 
-        u.user_id as user_id, 
-        m.merchant_name as merchant, 
-        r.amount as amount, 
+      RETURN
+        u.user_id as user_id,
+        m.merchant_name as merchant,
+        r.amount as amount,
         COALESCE(u.governance_status, 'OK') as governance_status,
+        COALESCE(u.velocity_flag, 'NORMAL') as velocity_flag,
         u.violations as violations
       ORDER BY r.ts DESC
       LIMIT 20
@@ -28,7 +29,8 @@ export async function GET() {
       merchant: record.get('merchant'),
       amount: record.get('amount').toString(),
       governance_status: record.get('governance_status'),
-      violations: record.get('violations')
+      velocity_flag: record.get('velocity_flag'),
+      violations: record.get('violations'),
     }));
 
     return NextResponse.json(transactions);
