@@ -1,0 +1,15 @@
+app            = "temporal-ring-hunter"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile.hunter"
+
+[env]
+  MEMGRAPH_URI   = "bolt://temporal-memgraph.internal:7687"
+  CHECK_INTERVAL = "30"
+  # REDIS_URL and OPENAI_API_KEY set via: fly secrets set ...
+
+[[vm]]
+  memory   = "512mb"
+  cpu_kind = "shared"
+  cpus     = 1

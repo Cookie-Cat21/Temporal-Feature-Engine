@@ -1,0 +1,29 @@
+app            = "temporal-memgraph"
+primary_region = "iad"
+
+[build]
+  image = "memgraph/memgraph-mage:latest"
+
+[mounts]
+  source      = "memgraph_data"
+  destination = "/var/lib/memgraph"
+
+# Bolt protocol — reachable privately as temporal-memgraph.internal:7687
+# Also exposed publicly so the Vercel dashboard can query it
+[[services]]
+  protocol      = "tcp"
+  internal_port = 7687
+  [[services.ports]]
+    port = 7687
+  [services.concurrency]
+    type       = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  memory   = "1gb"
+  cpu_kind = "shared"
+  cpus     = 1
+
+[processes]
+  app = "--log-level=WARNING --memory-limit=800"

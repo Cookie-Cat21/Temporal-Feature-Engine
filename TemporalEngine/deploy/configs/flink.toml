@@ -1,0 +1,31 @@
+app            = "temporal-flink"
+primary_region = "iad"
+
+[build]
+  dockerfile = "deploy/Dockerfile.flink-fly"
+
+[env]
+  KAFKA_BROKER     = "temporal-redpanda.internal:9092"
+  MEMGRAPH_URI     = "bolt://temporal-memgraph.internal:7687"
+  REDIS_HOST       = "redis"       # replaced by REDIS_URL secret at deploy time
+  MINIO_ENDPOINT   = "http://temporal-minio.internal:9000"
+  MINIO_ACCESS_KEY = "admin"
+
+# Flink REST API (job submission, monitoring)
+[http_service]
+  internal_port       = 8081
+  force_https         = true
+  auto_stop_machines  = false
+  auto_start_machines = true
+
+# Flink RPC (internal taskmanager communication)
+[[services]]
+  protocol      = "tcp"
+  internal_port = 6123
+  [[services.ports]]
+    port = 6123
+
+[[vm]]
+  memory   = "2gb"
+  cpu_kind = "shared"
+  cpus     = 2

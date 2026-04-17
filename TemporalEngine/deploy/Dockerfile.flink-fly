@@ -1,0 +1,28 @@
+# Flink standalone container for Fly.io
+# Runs JobManager + TaskManager in one machine, then submits the Python job.
+FROM flink:1.18.1-scala_2.12
+
+# Python runtime
+RUN apt-get update -y && \
+    apt-get install -y python3 python3-pip python3-dev curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# PyFlink must match the Flink image version exactly
+RUN pip3 install --no-cache-dir apache-flink==1.18.1
+
+# Project Python dependencies
+COPY requirements.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && \
+    python3 -m spacy download en_core_web_lg
+
+# Job artifacts
+WORKDIR /opt/flink/usrlib
+COPY processor.py pii_shield.py contract.json create_iceberg_tables.py ./
+
+# Startup script
+COPY deploy/flink-start.sh /flink-start.sh
+RUN chmod +x /flink-start.sh
+
+EXPOSE 8081 6123 9249
+
+CMD ["/flink-start.sh"]

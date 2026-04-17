@@ -1,0 +1,19 @@
+# Lightweight metrics exporter — reuses the same base as Dockerfile.hunter
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir \
+    redis \
+    prometheus_client \
+    python-dotenv
+
+COPY metrics_server.py .
+
+ENV METRICS_PORT=8000
+ENV SCRAPE_INTERVAL=10
+
+EXPOSE 8000
+
+CMD ["python", "metrics_server.py"]

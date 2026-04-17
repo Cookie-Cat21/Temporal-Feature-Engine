@@ -1,0 +1,21 @@
+app            = "temporal-metrics"
+primary_region = "iad"
+
+[build]
+  dockerfile = "deploy/Dockerfile.metrics"
+
+[env]
+  METRICS_PORT    = "8000"
+  SCRAPE_INTERVAL = "10"
+  # REDIS_URL set via: fly secrets set ...
+
+[http_service]
+  internal_port       = 8000
+  force_https         = true
+  auto_stop_machines  = true
+  auto_start_machines = true
+
+[[vm]]
+  memory   = "256mb"
+  cpu_kind = "shared"
+  cpus     = 1

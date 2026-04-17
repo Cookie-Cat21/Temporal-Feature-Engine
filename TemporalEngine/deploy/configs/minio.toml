@@ -1,0 +1,28 @@
+app            = "temporal-minio"
+primary_region = "iad"
+
+[build]
+  image = "quay.io/minio/minio"
+
+[env]
+  MINIO_ROOT_USER     = "admin"
+  MINIO_ROOT_PASSWORD = "password"   # override via: fly secrets set MINIO_ROOT_PASSWORD=...
+
+[mounts]
+  source      = "minio_data"
+  destination = "/data"
+
+# S3 API — reachable as temporal-minio.internal:9000
+[http_service]
+  internal_port        = 9000
+  force_https          = false
+  auto_stop_machines   = false
+  auto_start_machines  = true
+
+[[vm]]
+  memory   = "512mb"
+  cpu_kind = "shared"
+  cpus     = 1
+
+[processes]
+  app = "server /data --console-address :9001"

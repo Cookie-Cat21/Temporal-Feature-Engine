@@ -1,0 +1,60 @@
+app            = "temporal-redpanda"
+primary_region = "iad"
+
+[build]
+  image = "docker.redpanda.com/redpandadata/redpanda:v23.3.4"
+
+[env]
+  # Kafka-compatible broker on the Fly private network
+  REDPANDA_ADVERTISE_KAFKA_ADDR = "internal://0.0.0.0:9092,external://0.0.0.0:19092"
+
+[mounts]
+  source      = "redpanda_data"
+  destination = "/var/lib/redpanda/data"
+
+# Internal Kafka port — reachable by other Fly apps as temporal-redpanda.internal:9092
+[[services]]
+  protocol      = "tcp"
+  internal_port = 9092
+  [[services.ports]]
+    port = 9092
+
+# External Kafka port — for producer running outside Fly
+[[services]]
+  protocol      = "tcp"
+  internal_port = 19092
+  [[services.ports]]
+    port = 19092
+
+# Pandaproxy HTTP
+[[services]]
+  protocol      = "tcp"
+  internal_port = 8082
+  [[services.ports]]
+    handlers = ["http"]
+    port     = 80
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port     = 443
+
+[[vm]]
+  memory   = "1gb"
+  cpu_kind = "shared"
+  cpus     = 1
+
+[processes]
+  app = """
+    redpanda start
+    --smp 1
+    --memory 800M
+    --overprovisioned
+    --node-id 0
+    --check=false
+    --reserve-memory 0M
+    --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+    --advertise-kafka-addr internal://temporal-redpanda.internal:9092,external://temporal-redpanda.fly.dev:19092
+    --pandproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+    --advertise-pandproxy-addr internal://temporal-redpanda.internal:8082,external://temporal-redpanda.fly.dev:18082
+    --rpc-addr 0.0.0.0:33145
+    --advertise-rpc-addr temporal-redpanda.internal:33145
+  """
