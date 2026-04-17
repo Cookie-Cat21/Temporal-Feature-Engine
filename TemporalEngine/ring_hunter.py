@@ -1,17 +1,21 @@
 import os
 import time
+import redis
 from neo4j import GraphDatabase
 
 # --- 1. Project Config (Environment Priority) ---
-URI = os.getenv("MEMGRAPH_URI", "bolt://localhost:7687")
-AUTH = (os.getenv("MEMGRAPH_USER", ""), os.getenv("MEMGRAPH_PASSWORD", ""))
-CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "30")) # Scan the graph every 30 seconds
+URI            = os.getenv("MEMGRAPH_URI",  "bolt://localhost:7687")
+AUTH           = (os.getenv("MEMGRAPH_USER", ""), os.getenv("MEMGRAPH_PASSWORD", ""))
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "30"))
+REDIS_HOST     = os.getenv("REDIS_HOST", "localhost")
+
 
 class RingHunter:
     """The Autonomous Fraud Cluster Identification Engine."""
-    
+
     def __init__(self):
         self.driver = GraphDatabase.driver(URI, auth=AUTH)
+        self.r = redis.Redis(host=REDIS_HOST, port=6379, db=0)
 
     def close(self):
         self.driver.close()
@@ -37,23 +41,27 @@ class RingHunter:
             count = 0
             for record in results:
                 count += 1
-                ring_id = record['component_id']
-                print(f"IDENTIFIED: Ring {ring_id} (Size: {record['ring_size']})")
-                
-                # --- NEW: Autonomous Agentic Trigger ---
+                ring_id   = record['component_id']
+                ring_size = record['ring_size']
+                print(f"IDENTIFIED: Ring {ring_id} (Size: {ring_size})")
+
+                # Prometheus counter
+                self.r.incr("metrics:fraud_rings_detected_total")
+
+                # Autonomous Agentic Trigger
                 from investigator_agent import app
                 print(f"TRIGGERING: Autonomous Agent Investigation for Ring {ring_id}...")
                 try:
-                    # In a real scenario, we'd pick a representative user from the cluster
-                    representative_user = f"user_{ring_id}" 
+                    representative_user = f"user_{ring_id}"
                     app.invoke({
-                        "user_id": representative_user, 
-                        "transaction_amount": 1000.0, # Target high-value analysis
-                        "governance_status": "INVESTIGATE"
+                        "user_id":           representative_user,
+                        "transaction_amount": 1000.0,
+                        "governance_status": "INVESTIGATE",
                     })
+                    self.r.incr("metrics:agent_investigations_total")
                 except Exception as e:
                     print(f"AGENT ERROR: Failed to invoke investigator for ring {ring_id}: {e}")
-            
+
             if count == 0:
                 print("No suspect clusters identified in the current graph.")
             else:

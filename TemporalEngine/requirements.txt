@@ -6,8 +6,12 @@ pyiceberg
 langgraph
 langchain
 langchain-openai
+langchain-core
 neo4j
 python-dotenv
 presidio-analyzer
 presidio-anonymizer
 spacy
+prometheus_client
+pandas
+pyarrow

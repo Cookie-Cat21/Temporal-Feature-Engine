@@ -1,7 +1,7 @@
 import json
 import time
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from faker import Faker
 from confluent_kafka import Producer
 
@@ -19,13 +19,22 @@ def delivery_report(err, msg):
     else:
         print(f"Message delivered to {msg.topic()} [{msg.partition()}]")
 
+DEVICES = [f"device_{i}" for i in range(1, 8)]
+IPS    = [f"192.168.1.{i}" for i in range(10, 30)]
+
+# Assign each user a small set of devices/IPs to create realistic sharing patterns
+USER_DEVICES = {uid: random.sample(DEVICES, k=random.randint(1, 3)) for uid in [f"user_{i}" for i in range(1, 11)]}
+USER_IPS     = {uid: random.sample(IPS,     k=random.randint(1, 3)) for uid in [f"user_{i}" for i in range(1, 11)]}
+
 def generate_transaction(user_id):
     return {
         "transaction_id": fake.uuid4(),
         "user_id": user_id,
         "amount": round(random.uniform(5.0, 500.0), 2),
         "merchant": fake.company(),
-        "timestamp": datetime.utcnow().isoformat() + "Z"
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "device_id": random.choice(USER_DEVICES[user_id]),
+        "ip_address": random.choice(USER_IPS[user_id]),
     }
 
 def generate_profile_update(user_id):
@@ -55,11 +64,10 @@ if __name__ == "__main__":
             uid = random.choice(user_ids)
             transaction = generate_transaction(uid)
             
-            # Simulate LATE ARRIVAL (5% of the time, delay the event timestamp)
+            # Simulate LATE ARRIVAL (5% of the time, backdate the event timestamp by 35s)
             if random.random() < 0.05:
-                # Set timestamp to 30 seconds ago
-                transaction["timestamp"] = datetime.fromisoformat(transaction["timestamp"][:-1] if transaction["timestamp"].endswith("Z") else transaction["timestamp"])
-                transaction["timestamp"] = datetime.utcnow().replace(second=0).isoformat() + "Z"
+                late_dt = datetime.utcnow() - timedelta(seconds=35)
+                transaction["timestamp"] = late_dt.isoformat() + "Z"
                 print(f"!!! GHOST TRANSACTION (Late Arrival): {uid}")
 
             p.produce(TRANSACTION_TOPIC, key=uid, value=json.dumps(transaction), callback=delivery_report)

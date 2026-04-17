@@ -1,0 +1,48 @@
+groups:
+  - name: temporal_engine_alerts
+    rules:
+
+      - alert: HighVelocityFraudSpike
+        expr: increase(temporal_engine_velocity_high_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High-velocity fraud spike detected"
+          description: "More than 10 HIGH-velocity events in the last 5 minutes."
+
+      - alert: GovernanceViolationSpike
+        expr: increase(temporal_engine_governance_violations_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data governance violations spiking"
+          description: "More than 5 contract violations in the last 5 minutes — possible schema drift or exfiltration."
+
+      - alert: DLQEventsAccumulating
+        expr: increase(temporal_engine_dlq_events_total[10m]) > 20
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dead Letter Queue filling up"
+          description: "More than 20 malformed events in the last 10 minutes — check producer schema."
+
+      - alert: PipelineStalled
+        expr: increase(temporal_engine_events_processed_total[5m]) == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Flink pipeline appears stalled"
+          description: "No events processed in the last 5 minutes."
+
+      - alert: FraudRingDetected
+        expr: increase(temporal_engine_fraud_rings_detected_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: high
+        annotations:
+          summary: "Fraud ring identified"
+          description: "RingHunter detected a new fraud cluster in Memgraph."

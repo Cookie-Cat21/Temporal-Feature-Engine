@@ -44,8 +44,16 @@ services:
         jobmanager.rpc.address: jobmanager
         metrics.reporter.prom.class: org.apache.flink.metrics.prometheus.PrometheusReporter
         metrics.reporter.prom.port: 9249
+        state.backend: filesystem
+        state.checkpoints.dir: s3a://warehouse/checkpoints
+        s3.endpoint: http://minio:9000
+        s3.path.style.access: true
+        s3.access-key: admin
+        s3.secret-key: password
     volumes:
       - ./lib:/opt/flink/lib
+    depends_on:
+      - minio
 
   taskmanager:
     image: apache/flink:1.18.1-scala_2.12
@@ -60,6 +68,12 @@ services:
         taskmanager.numberOfTaskSlots: 2
         metrics.reporter.prom.class: org.apache.flink.metrics.prometheus.PrometheusReporter
         metrics.reporter.prom.port: 9249
+        state.backend: filesystem
+        state.checkpoints.dir: s3a://warehouse/checkpoints
+        s3.endpoint: http://minio:9000
+        s3.path.style.access: true
+        s3.access-key: admin
+        s3.secret-key: password
     volumes:
       - ./lib:/opt/flink/lib
 
@@ -97,8 +111,24 @@ services:
     container_name: temporal_prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./alert_rules.yml:/etc/prometheus/alert_rules.yml
     ports:
       - "9090:9090"
+
+  metrics_server:
+    build:
+      context: .
+      dockerfile: Dockerfile.hunter   # reuses the same Python image
+    container_name: temporal_metrics
+    command: python metrics_server.py
+    environment:
+      - REDIS_HOST=redis
+      - METRICS_PORT=8000
+      - SCRAPE_INTERVAL=10
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
 
   grafana:
     image: grafana/grafana:latest
