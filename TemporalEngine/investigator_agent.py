@@ -1,7 +1,14 @@
+import operator
 import os
-import redis
 import json
+import redis
 import time
+from typing import Annotated, List, TypedDict
+
+from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, END
+from neo4j import GraphDatabase
 
 # --- 1. Project Config (Environment Priority) ---
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -31,8 +38,8 @@ class AgentState(TypedDict):
     violations: List[str]
 
 # --- 2. Tooling (Graph Queries) ---
-URI = "bolt://localhost:7687"
-AUTH = ("", "")
+URI = os.getenv("MEMGRAPH_URI", "bolt://localhost:7687")
+AUTH = (os.getenv("MEMGRAPH_USER", ""), os.getenv("MEMGRAPH_PASSWORD", ""))
 
 def query_memgraph(cypher):
     try:

@@ -41,16 +41,31 @@ class PIIShield:
         
         return anonymized_result.text
 
-def process_payload(payload: dict, sensitive_fields: list) -> dict:
-    """Scans and masks sensitive fields in a dictionary."""
-    shield = PIIShield()
+_default_shield: PIIShield | None = None
+
+
+def get_shield() -> PIIShield:
+    """Return the module-level singleton, creating it on first call."""
+    global _default_shield
+    if _default_shield is None:
+        _default_shield = PIIShield()
+        _default_shield._ensure_loaded()
+    return _default_shield
+
+
+def process_payload(payload: dict, sensitive_fields: list, shield: PIIShield | None = None) -> dict:
+    """Scans and masks sensitive fields in a dictionary.
+
+    Pass a pre-initialized ``shield`` to avoid repeated engine construction
+    (e.g. from a Flink operator's ``open()`` method).
+    """
+    active_shield = shield if shield is not None else get_shield()
     masked_payload = payload.copy()
-    
+
     for field in sensitive_fields:
         if field in masked_payload:
-            original_value = masked_payload[field]
-            masked_payload[field] = shield.mask_pii(original_value)
-            
+            masked_payload[field] = active_shield.mask_pii(masked_payload[field])
+
     return masked_payload
 
 if __name__ == "__main__":

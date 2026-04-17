@@ -1,6 +1,6 @@
 {
     "version": "1.0",
-    "allowed_fields": ["user_id", "amount", "merchant", "processed_at", "profile_credit_score", "profile_status", "notes"],
+    "allowed_fields": ["user_id", "amount", "merchant", "processed_at", "profile_credit_score", "profile_status", "notes", "tx_count_5m", "tx_sum_5m", "velocity_flag"],
     "sensitive_fields": ["merchant", "notes"],
     "strict_mode": false
 }

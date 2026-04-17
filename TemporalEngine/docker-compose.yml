@@ -136,8 +136,11 @@ services:
     environment:
       - MEMGRAPH_URI=bolt://memgraph:7687
       - CHECK_INTERVAL=15
+      - REDIS_HOST=redis
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       - memgraph
+      - redis
 
   processor:
     build:
