@@ -26,7 +26,9 @@ jobs:
           check-jsonschema --schemafile contract.json TemporalEngine/contract.json || true
           
       - name: Security Scan (Bandit)
-        run: bandit -r TemporalEngine/ -x tests/
+        # --severity-level medium: B311 (random module) is intentional in simulation
+        # code and test data generators — only flag medium/high issues.
+        run: bandit -r TemporalEngine/ -x TemporalEngine/tests/ --severity-level medium
         
       - name: Lint Next.js Dashboard
         run: |

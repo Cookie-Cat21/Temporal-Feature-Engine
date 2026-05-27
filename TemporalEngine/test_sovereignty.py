@@ -4,7 +4,7 @@ from pii_shield import process_payload
 from processor import ContractEnforcer
 
 class TestDataSovereignty(unittest.TestCase):
-    
+
     def test_pii_masking(self):
         """Test that sensitive fields are correctly masked."""
         payload = {
@@ -14,15 +14,15 @@ class TestDataSovereignty(unittest.TestCase):
             "amount": "45.0"
         }
         sensitive_fields = ["merchant", "notes"]
-        
+
         masked = process_payload(payload, sensitive_fields)
-        
+
         print("\n--- PII Masking Test ---")
         print(f"Original Merchant: {payload['merchant']}")
         print(f"Masked Merchant:   {masked['merchant']}")
         print(f"Original Notes:    {payload['notes']}")
         print(f"Masked Notes:      {masked['notes']}")
-        
+
         self.assertIn("[REDACTED", masked["merchant"])
         self.assertIn("[REDACTED_EMAIL]", masked["notes"])
         self.assertIn("[REDACTED_PHONE]", masked["notes"])
@@ -34,7 +34,7 @@ class TestDataSovereignty(unittest.TestCase):
         contract = {
             "allowed_fields": ["user_id", "amount", "merchant", "processed_at"]
         }
-        
+
         def enforce(enriched):
             allowed = set(contract["allowed_fields"])
             current = set(enriched.keys())
@@ -54,12 +54,12 @@ class TestDataSovereignty(unittest.TestCase):
         # Case 2: Violation payload
         payload_bad = {"user_id": "u1", "credit_card": "1234-5678-9012-3456"}
         res_bad = enforce(payload_bad.copy())
-        
+
         print("\n--- Contract Enforcement Test ---")
         print(f"Bad Payload: {payload_bad}")
         print(f"Status:      {res_bad['governance_status']}")
         print(f"Violations:  {res_bad['violations']}")
-        
+
         self.assertEqual(res_bad["governance_status"], "VIOLATION")
         self.assertIn("credit_card", res_bad["violations"])
 

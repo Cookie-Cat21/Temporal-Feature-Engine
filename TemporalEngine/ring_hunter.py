@@ -25,7 +25,7 @@ class RingHunter:
         with self.driver.session() as session:
             # 1. Run Weakly Connected Components (WCC) to identify clusters of Users and Merchants
             print("Scanning for autonomous fraud rings...")
-            
+
             # WCC helps find disconnected subgraphs (potential rings)
             cypher_wcc = """
             CALL wcc.get() YIELD node, component_id
@@ -36,7 +36,7 @@ class RingHunter:
             SET member.fraud_ring_id = component_id
             RETURN component_id, size(cluster) as ring_size
             """
-            
+
             results = session.run(cypher_wcc)
             count = 0
             for record in results:

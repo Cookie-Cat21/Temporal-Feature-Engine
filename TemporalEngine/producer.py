@@ -47,10 +47,10 @@ def generate_profile_update(user_id):
 
 if __name__ == "__main__":
     print(f"Starting producer (Brokers: {KAFKA_BROKER})...")
-    
+
     # Active users to simulate
     user_ids = [f"user_{i}" for i in range(1, 11)]
-    
+
     try:
         while True:
             # 1. Randomly update a user profile (less frequent)
@@ -63,7 +63,7 @@ if __name__ == "__main__":
             # 2. Generate transactions (more frequent)
             uid = random.choice(user_ids)
             transaction = generate_transaction(uid)
-            
+
             # Simulate LATE ARRIVAL (5% of the time, backdate the event timestamp by 35s)
             if random.random() < 0.05:
                 late_dt = datetime.utcnow() - timedelta(seconds=35)
@@ -71,10 +71,10 @@ if __name__ == "__main__":
                 print(f"!!! GHOST TRANSACTION (Late Arrival): {uid}")
 
             p.produce(TRANSACTION_TOPIC, key=uid, value=json.dumps(transaction), callback=delivery_report)
-            
+
             p.poll(0)
             time.sleep(random.uniform(0.5, 2.0))
-            
+
     except KeyboardInterrupt:
         print("Stopping...")
     finally:

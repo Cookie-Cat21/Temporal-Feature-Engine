@@ -112,7 +112,6 @@ class TestTemporalJoin(unittest.TestCase):
         """The second profile update should overwrite the first."""
         tx = {"user_id": "user_1", "amount": "20.0", "merchant": "X", "timestamp": "2024-01-01T00:00:00Z"}
 
-        old_profile = {"account_status": "ACTIVE", "credit_score": 500}
         new_profile = {"account_status": "FLAGGED", "credit_score": 300}
 
         result = temporal_join(new_profile, msg_type=1, data=tx)

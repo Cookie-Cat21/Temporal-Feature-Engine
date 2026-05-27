@@ -104,10 +104,14 @@ def run_dp_experiment(
             for w in windows:
                 predicted = noisy_velocity_flag(w, eps)
                 true      = w.true_label
-                if true == "HIGH"   and predicted == "HIGH":   tp_acc += 1
-                elif true == "HIGH" and predicted == "NORMAL": fn_acc += 1
-                elif true == "NORMAL" and predicted == "HIGH": fp_acc += 1
-                else:                                          tn_acc += 1
+                if true == "HIGH" and predicted == "HIGH":
+                    tp_acc += 1
+                elif true == "HIGH" and predicted == "NORMAL":
+                    fn_acc += 1
+                elif true == "NORMAL" and predicted == "HIGH":
+                    fp_acc += 1
+                else:
+                    tn_acc += 1
 
         total = n_trials * len(windows)
         tpr  = tp_acc / (tp_acc + fn_acc) if (tp_acc + fn_acc) > 0 else 0.0

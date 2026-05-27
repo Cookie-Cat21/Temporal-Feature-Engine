@@ -7,7 +7,7 @@ AUTH = ("", "") # Default for local Memgraph
 def initialize_graph():
     """Setup the Fraud Ring Schema in Memgraph."""
     print(f"Connecting to Memgraph at {URI}...")
-    
+
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
         with driver.session() as session:
             # 1. Clear existing Data (Be careful in Prod!)

@@ -5,7 +5,7 @@ from presidio_anonymizer.entities import OperatorConfig
 
 class PIIShield:
     """A wrapper for Presidio Analyzer and Anonymizer engines."""
-    
+
     def __init__(self):
         # Lazy loading to avoid serialization issues during Flink task deployment
         self.analyzer = None
@@ -21,12 +21,12 @@ class PIIShield:
         """Finds and masks PII in the given text."""
         if not text or not isinstance(text, str):
             return text
-            
+
         self._ensure_loaded()
-        
+
         # Analyze the text for PII
         results = self.analyzer.analyze(text=text, language='en')
-        
+
         # Anonymize the text (masking PII)
         anonymized_result = self.anonymizer.anonymize(
             text=text,
@@ -38,7 +38,7 @@ class PIIShield:
                 "PHONE_NUMBER": OperatorConfig("replace", {"new_value": "[REDACTED_PHONE]"})
             }
         )
-        
+
         return anonymized_result.text
 
 _default_shield: PIIShield | None = None

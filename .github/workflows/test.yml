@@ -25,12 +25,15 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pytest faker redis duckdb \
-            presidio-analyzer presidio-anonymizer spacy \
+            presidio-analyzer presidio-anonymizer "spacy>=3,<4" \
             python-dotenv prometheus_client pandas pyarrow \
-            langchain langchain-core langchain-openai langgraph neo4j
+            langchain langchain-core langchain-openai langgraph neo4j \
+            networkx
 
       - name: Download spaCy model
-        run: python -m spacy download en_core_web_lg
+        # en_core_web_sm is ~12 MB vs en_core_web_lg ~750 MB — sufficient for
+        # Presidio NER in CI and avoids timeout on the large model download.
+        run: python -m spacy download en_core_web_sm
 
       - name: Run streaming logic tests (no Flink cluster needed)
         working-directory: TemporalEngine

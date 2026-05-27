@@ -82,17 +82,19 @@ def reason_and_decide(state: AgentState):
     User: {state['user_id']}
     Amount: ${state['transaction_amount']}
     Context: {state['context']}
-    
+
     Final decision must be one of: [ALLOW, BLOCK, INVESTIGATE].
     Provide a brief reason.
     """
     response = model.invoke([HumanMessage(content=prompt)])
     content = response.content
-    
+
     decision = "INVESTIGATE"
-    if "ALLOW" in content: decision = "ALLOW"
-    elif "BLOCK" in content: decision = "BLOCK"
-    
+    if "ALLOW" in content:
+        decision = "ALLOW"
+    elif "BLOCK" in content:
+        decision = "BLOCK"
+
     report_step("Reason & Decide", f"FINAL DECISION: {decision} - Investigation conclude.", status="completed")
     return {"decision": decision, "messages": [response]}
 
@@ -103,9 +105,9 @@ def security_audit(state: AgentState):
     prompt = f"""
     The Data Sovereignty Guard has detected the following contract violations:
     {violations}
-    
+
     User: {state['user_id']}
-    
+
     Is this a simple schema drift or a potential data exfiltration attempt?
     Provide a risk score (0-10) and a recommendation.
     """
