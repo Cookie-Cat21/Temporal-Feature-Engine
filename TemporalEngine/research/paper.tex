@@ -1,0 +1,518 @@
+\documentclass[sigconf,nonacm]{acmart}
+
+%% -----------------------------------------------------------------------
+%% Packages
+%% -----------------------------------------------------------------------
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xspace}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{microtype}
+
+%% -----------------------------------------------------------------------
+%% Macros
+%% -----------------------------------------------------------------------
+\newcommand{\sysname}{\textsc{TemporalEngine}\xspace}
+\newcommand{\wcc}{\textsc{WCC}\xspace}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\lap}{\mathrm{Lap}}
+
+%% -----------------------------------------------------------------------
+%% Metadata
+%% -----------------------------------------------------------------------
+\title{Adversarial Robustness and Privacy-Utility Tradeoffs\\
+       in Real-Time Graph-Based Fraud Ring Detection}
+
+\author{Ovindu Karunaratne}
+\affiliation{%
+  \institution{Independent Research}
+  \country{}
+}
+\email{karunaratneovindu@gmail.com}
+
+\begin{document}
+
+\begin{abstract}
+Weakly Connected Component (\wcc) graph analysis is the dominant technique
+for real-time fraud ring detection in streaming financial systems, yet its
+adversarial robustness has not been systematically studied in a streaming
+context.  We present \sysname, a production-grade fraud detection platform
+built on Apache Flink, Memgraph, and LangGraph, and use it as an
+experimental testbed for two research questions: (1)~How does \wcc-based
+ring detection degrade under adversarial graph manipulation with a bounded
+budget?  (2)~What is the privacy-utility tradeoff when Laplace differential
+privacy is applied to co-located velocity detection?
+
+Our experiments (30 Monte Carlo trials per configuration) show that \wcc
+exhibits strong \emph{multi-channel redundancy}: breaking only device/IP
+connections does not reduce recall ($R = 1.000$ at all budgets), and
+breaking only merchant connections is similarly ineffective ($F_1 \geq
+0.989$).  Only \emph{simultaneous} evasion of all three connection channels
+(devices, IPs, merchants) achieves meaningful recall degradation---and even
+then, an adversary must corrupt 80\% of ring members before recall falls
+below $0.1$.  For differential privacy, we identify $\eps \approx 5$ as the
+practical operating point: below this threshold false-positive rates become
+operationally unacceptable ($\mathrm{FPR} = 0.28$ at $\eps=1$); above it,
+near-perfect recall is preserved ($\mathrm{FPR} = 0.027$ at $\eps=5$).
+\end{abstract}
+
+\keywords{fraud detection, graph analytics, weakly connected components,
+          adversarial robustness, differential privacy, streaming systems}
+
+\maketitle
+
+%% ===================================================================
+\section{Introduction}
+%% ===================================================================
+
+Fraud rings---coordinated groups of accounts sharing devices, IP addresses,
+and merchant relationships---account for a disproportionate fraction of
+financial fraud losses~\cite{pourhabibi2020}.  Graph-based detection using
+Weakly Connected Components (\wcc) is a well-established approach
+\cite{akoglu2015,liu2021,liu2018heterogeneous}, adopted by major payment
+processors and implemented in production systems such as AWS Graph Fraud
+Detection and Neo4j Fraud Detection~\cite{weber2019}.
+
+Despite widespread deployment, two questions remain underexplored:
+
+\textbf{Q1 (Adversarial Robustness).}  How many adversarial modifications
+must an attacker make to evade \wcc-based detection, and which connection
+channels are the weakest links?  Prior adversarial graph
+work~\cite{zugner2018,dai2018} operates on static graphs; we study the
+\emph{streaming} case where an attacker must operate in real-time without
+seeing the full accumulated graph state.
+
+\textbf{Q2 (Privacy-Utility Tradeoff).}  Velocity detection---flagging
+users with anomalous transaction rates or volumes in a sliding window---is
+the complementary real-time signal to \wcc.  If a financial institution
+wants to publish aggregate velocity statistics under differential privacy
+guarantees~\cite{dwork2014}, what $\eps$ is needed before the Laplace noise
+degrades operational detection quality?
+
+We answer both questions experimentally using \sysname, a streaming fraud
+detection system we build and open-source.  Our contributions are:
+
+\begin{enumerate}
+  \item A reproducible simulation harness replicating a production \wcc
+        fraud ring detector (no Docker/Kafka stack required for experiments).
+  \item Three adversarial attack strategies with formal budget definitions,
+        evaluated across the full budget range~$B \in [0, N]$.
+  \item A differential privacy velocity detector with empirical
+        privacy-utility curves across $\eps \in \{0.1, \ldots, 50\}$.
+  \item An empirical defense comparison: \wcc baseline
+        vs.\ AdaptiveThreshold vs.\ MultiSignalDetector.
+\end{enumerate}
+
+%% ===================================================================
+\section{System Model}
+%% ===================================================================
+
+\subsection{\sysname Architecture}
+
+\sysname processes financial transactions as a streaming pipeline:
+
+\begin{center}
+\small
+Kafka/Redpanda $\to$ Apache Flink $\to$
+$\begin{cases}
+  \text{Redis (feature store)}\\
+  \text{Memgraph (graph DB)}\\
+  \text{Apache Iceberg (data lake)}
+\end{cases}$
+$\to$ LangGraph Agent
+\end{center}
+
+\noindent\textbf{Flink pipeline stages.}
+\texttt{SafeParse} $\to$ \texttt{TemporalJoin} $\to$ \texttt{VelocityDetector}
+(5-min sliding window) $\to$ \texttt{ContractEnforcer} $\to$ \texttt{PIIShield}
+(Microsoft Presidio) $\to$ \texttt{GraphSyncSink} $\to$ \texttt{IcebergSink}.
+
+\noindent\textbf{Graph model.}
+Four node types: \texttt{User}, \texttt{Merchant}, \texttt{Device}, \texttt{IP}.
+Two edge types: \texttt{TRANSACTED\_WITH} (User$\to$Merchant) and
+\texttt{LOGGED\_IN\_FROM} (User$\to$Device, User$\to$IP).
+
+\noindent\textbf{Ring detector (\texttt{ring\_hunter.py}).}
+Runs Memgraph's \wcc algorithm periodically.  Components with more than 3
+nodes are flagged as candidate fraud rings and dispatched to a LangGraph
+investigator agent for autonomous risk decision (ALLOW / BLOCK / INVESTIGATE).
+
+\noindent\textbf{Velocity detector (\texttt{processor.py}).}
+Flags a user as \texttt{HIGH} if, within a 5-minute event-time window, they
+exceed $\tau_{\mathrm{count}} = 5$ transactions \emph{or} $\tau_{\mathrm{sum}}
+= \$1{,}000$.
+
+\subsection{Graph Construction}
+
+For user $u$ transacting at merchant $m$ via device $d$ and IP address
+$\mathit{ip}$, we add nodes $\{u, m, d, \mathit{ip}\}$ and edges
+$\{(u,m),\,(u,d),\,(u,\mathit{ip})\}$ to a property graph $G$.  A fraud
+ring of $k$ users sharing $s$ devices, $t$ IP addresses, and $p$ merchants
+forms a \wcc component of size $k + s + t + p$, with all ring members
+transitively reachable through any shared infrastructure node.
+
+%% ===================================================================
+\section{Threat Model}
+%% ===================================================================
+
+We adopt a \textbf{white-box adversarial model}: the attacker knows the
+\wcc detection algorithm, all threshold parameters, and the full ring
+structure.  This is the strongest reasonable assumption and serves as an
+upper bound on adversarial capability.
+
+\noindent\textbf{Attacker goal.}
+Minimize the probability of the fraud ring being detected by the \wcc ring
+hunter.
+
+\noindent\textbf{Adversarial budget $B$.}
+The number of ring users whose transaction parameters the attacker may
+modify before being detected by out-of-band controls.  $B=0$ is the benign
+baseline; $B=N$ (where $N$ is total ring membership) is the maximum
+capability.
+
+\noindent\textbf{Attack surface.}
+Three independent connection channels through which users are co-located in
+the graph: (1) shared device IDs, (2) shared IP addresses, (3) shared
+merchant relationships.
+
+%% ===================================================================
+\section{Attack Strategies}
+%% ===================================================================
+
+\subsection{DeviceIP Rotation}
+Replace targeted users' shared device and IP with unique values.  Merchant
+connections remain intact.  \emph{Hypothesis:} merchant co-occurrence alone
+maintains ring connectivity, so recall will not decrease.
+
+\subsection{Merchant Rotation}
+Replace targeted users' merchant with a unique one-off entity.  Device/IP
+sharing remains intact.  \emph{Hypothesis:} device/IP paths alone are
+sufficient; merchant rotation will have minimal impact.
+
+\subsection{Full Evasion}
+Simultaneously rotate device, IP, \emph{and} merchant for each targeted
+user---the maximum adversarial capability.  \emph{Hypothesis:} this severs
+all \wcc paths for targeted users; recall approaches zero as $B \to N$.
+
+\subsection{Velocity Throttle (Complementary Attack)}
+Splits each targeted user's transaction amount to remain below
+$\tau_{\mathrm{sum}}$ per window, defeating the Flink velocity detector
+without modifying graph topology.  \emph{Hypothesis:} no effect on \wcc
+ring detection; orthogonal to the graph signal.
+
+%% ===================================================================
+\section{Defenses}
+%% ===================================================================
+
+\subsection{Baseline: Fixed-Threshold WCC}
+Component size $> 3$ (\texttt{ring\_hunter.py} default).  Evaluated as
+reference across all experiments.
+
+\subsection{AdaptiveThreshold}
+Dynamically lowers the component-size cutoff from 3 toward a minimum floor
+of 1 as system pressure (recent alert rate) increases.  Increases sensitivity
+under suspected attack conditions at the cost of more false positives.
+
+\subsection{MultiSignalDetector}
+Requires a component to satisfy at least 2 of 3 independent signals:
+\begin{itemize}
+  \item Signal A: component size $> 3$
+  \item Signal B: device/IP reuse ratio $> 0.3$
+        (fraction of infrastructure nodes shared by ${\geq}2$ users)
+  \item Signal C: user count in component $> 3$
+\end{itemize}
+An attacker who breaks Signal~A by rotating infrastructure still triggers
+Signal~B or C if sufficient sharing remains.
+
+%% ===================================================================
+\section{Differential Privacy for Velocity Detection}
+%% ===================================================================
+
+We protect velocity statistics using the Laplace
+mechanism~\cite{dwork2014}.  Let $f(D)$ denote a statistic computed over
+dataset $D$.  The mechanism outputs $\tilde{f}(D) = f(D) + \eta$ where
+$\eta \sim \lap(\Delta f / \eps)$ and $\Delta f$ is the global $L_1$
+sensitivity.
+
+\noindent\textbf{Sensitivity analysis.}
+\begin{align}
+  \Delta_{\mathrm{count}} &= 1
+    \quad\text{(adding/removing one tx changes count by $\leq 1$)} \\
+  \Delta_{\mathrm{sum}} &= \$500
+    \quad\text{(maximum single-transaction amount)}
+\end{align}
+
+Noise $\eta_{\mathrm{count}} \sim \lap(1/\eps)$ and
+$\eta_{\mathrm{sum}} \sim \lap(500/\eps)$ are independently sampled and
+added to \texttt{tx\_count\_5m} and \texttt{tx\_sum\_5m} before threshold
+comparison.
+
+We generate $N = 400$ synthetic user windows with known ground-truth labels
+(200 \texttt{HIGH}, 200 \texttt{NORMAL}) and report TPR, FPR, FNR across
+$\eps \in \{0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0\}$ averaged over 30
+independent noise draws.
+
+%% ===================================================================
+\section{Experimental Setup}
+%% ===================================================================
+
+All experiments use Monte Carlo simulation ($n = 30$ independent trials per
+data point, independently seeded).  Each trial instantiates a fresh
+\texttt{Scenario} with the parameters in Table~\ref{tab:setup}, applies the
+chosen attack, rebuilds the graph from scratch, and evaluates \wcc detection
+against ground-truth rings using Intersection-over-Union matching at
+$\mathrm{IoU} \geq 0.5$.
+
+\begin{table}[h]
+\caption{Experiment parameters}
+\label{tab:setup}
+\centering
+\begin{tabular}{lc}
+\toprule
+Parameter & Value \\
+\midrule
+Fraud rings & 10 \\
+Users per ring (total: 50) & 5 \\
+Shared devices per ring & 2 \\
+Shared IPs per ring & 2 \\
+Shared merchants per ring & 2 \\
+Background (benign) users & 30 \\
+IoU threshold (ring match) & 0.5 \\
+Budget range ($B$) & 0--50 users (0\%--100\%) \\
+Monte Carlo trials & 30 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ===================================================================
+\section{Results}
+%% ===================================================================
+
+\subsection{Adversarial Robustness}
+
+Table~\ref{tab:adversarial} presents \wcc detection metrics under each
+attack strategy.  Budget is expressed as the percentage of total fraud users
+whose transaction parameters are modified.
+
+\begin{table}[h]
+\caption{WCC detection metrics under adversarial attack ($n=30$ trials).}
+\label{tab:adversarial}
+\centering
+\small
+\begin{tabular}{llccc}
+\toprule
+Strategy & Budget & Precision & Recall & $F_1$ \\
+\midrule
+Baseline (no attack) & 0\%   & 0.997 & 1.000 & 0.998 \\
+\midrule
+DeviceIP Rotation    & 10\%  & 0.985 & 1.000 & 0.992 \\
+DeviceIP Rotation    & 40\%  & 0.647 & 1.000 & 0.784 \\
+DeviceIP Rotation    & 100\% & 0.615 & 1.000 & 0.760 \\
+\midrule
+Merchant Rotation    & 10\%  & 0.997 & 1.000 & 0.998 \\
+Merchant Rotation    & 100\% & 0.979 & 1.000 & 0.989 \\
+\midrule
+Full Evasion         & 10\%  & 0.993 & 0.993 & 0.993 \\
+Full Evasion         & 40\%  & 0.731 & 0.660 & 0.692 \\
+Full Evasion         & 60\%  & 0.516 & 0.313 & 0.388 \\
+Full Evasion         & 80\%  & 0.247 & 0.050 & 0.082 \\
+Full Evasion         & 100\% & 0.000 & 0.000 & 0.000 \\
+\midrule
+Velocity Throttle    & 100\% & 0.997 & 1.000 & 0.998 \\
+Combined Evasion     & 80\%  & 0.247 & 0.050 & 0.082 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{F1: Merchant co-occurrence is the dominant \wcc signal.}
+DeviceIP rotation degrades precision but never reduces recall below
+$1.000$, even when 100\% of ring users rotate devices and IPs.  Fraud rings
+remain fully connected through shared merchant relationships, revealing
+merchant co-occurrence as the primary structural signal.
+
+\noindent\textbf{F2: Device/IP sharing is redundantly sufficient.}
+Merchant rotation is similarly ineffective ($F_1 \geq 0.989$ at all
+budgets): device and IP sharing alone sustain full connectivity.
+
+\noindent\textbf{F3: Full Evasion produces a critical transition between
+60--80\% budget.}  $F_1$ falls from 0.998 at 0\% budget to 0.692 at 40\%,
+0.082 at 80\%, and 0.000 at 100\%.  The inflection point near 60--80\%
+budget ($R$ drops from 0.313 to 0.050) indicates that a ring can tolerate
+approximately 3 of 5 members being fully evaded before its \wcc footprint
+collapses.
+
+\noindent\textbf{F4: Velocity throttle is orthogonal to WCC.}
+VelocityThrottle ($100\%$ budget) leaves detection unchanged ($F_1 = 0.998$),
+confirming the two detection layers are independent.  Combined Evasion
+matches Full Evasion alone.
+
+\noindent\textbf{F5: Multi-channel redundancy is the core defense.}
+Partial evasion through any single channel fails to reduce recall;
+simultaneous evasion of all three channels is required.
+
+\subsection{Differential Privacy}
+
+Table~\ref{tab:dp} shows velocity detection metrics under Laplace noise.
+
+\begin{table}[h]
+\caption{Velocity detection under Laplace DP noise ($n=30$ trials,
+         $N=400$ windows).}
+\label{tab:dp}
+\centering
+\begin{tabular}{ccccc}
+\toprule
+$\eps$ & TPR & FNR & FPR & Accuracy \\
+\midrule
+0.1  & 0.8598 & 0.1402 & 0.6732 & 0.5933 \\
+0.5  & 0.9692 & 0.0308 & 0.4265 & 0.7713 \\
+1.0  & 0.9907 & 0.0093 & 0.2782 & 0.8562 \\
+2.0  & 0.9988 & 0.0012 & 0.1200 & 0.9394 \\
+5.0  & 1.0000 & 0.0000 & 0.0270 & 0.9865 \\
+10.0 & 1.0000 & 0.0000 & 0.0097 & 0.9952 \\
+50.0 & 1.0000 & 0.0000 & 0.0002 & 0.9999 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{F6: Phase transition at $\eps \approx 2$--$5$.}
+Below $\eps = 2$, FPR exceeds 12\%, rendering the detector operationally
+unreliable at production scale.  Above $\eps = 5$, TPR reaches $1.000$ and
+FPR drops below 3\%.
+
+\noindent\textbf{F7: 10$\times$ FPR improvement for $5\times$ privacy cost.}
+FPR drops from 27.8\% ($\eps=1$) to 2.7\% ($\eps=5$)---a $10\times$
+improvement for only a $5\times$ increase in privacy budget.
+
+\noindent\textbf{F8: Recommended operating points.}
+$\eps = 2$ is the minimum viable threshold for automated blocking systems
+where follow-up investigation is cheap.  $\eps = 5$ is recommended for
+human-in-the-loop investigation queues.
+
+\subsection{Defense Comparison}
+
+Table~\ref{tab:defense} compares the three detectors under Full Evasion.
+
+\begin{table}[h]
+\caption{Detector $F_1$ under Full Evasion attack ($n=30$ trials).}
+\label{tab:defense}
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Detector & 0\% & 20\% & 40\% & 60\% & 80\% & 100\% \\
+\midrule
+WCC Baseline      & 0.998 & 0.995 & 0.692 & 0.388 & 0.082 & 0.000 \\
+AdaptiveThreshold & 0.998 & 0.995 & 0.692 & 0.388 & 0.082 & 0.000 \\
+MultiSignal       & 0.998 & 0.995 & 0.700 & 0.397 & 0.083 & 0.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{F9: No defense meaningfully improves WCC robustness.}
+MultiSignal offers marginal gains ($F_1 + 0.8\%$ at 40\% budget) but does
+not alter the recall degradation curve.  At 100\% budget, all three
+detectors fail completely.  This implies the vulnerability is structural:
+once all three connection channels are severed, no graph-based single-snapshot
+detector can recover the ring.
+
+\noindent\textbf{Implication.}
+Effective defense requires either (a) \emph{temporal graph analysis}---detecting
+coordinated changes in connection patterns over time rather than evaluating a
+single \wcc snapshot---or (b) \emph{non-graph signals} such as behavioral
+biometrics or device fingerprinting at the application layer.
+
+%% ===================================================================
+\section{Discussion}
+%% ===================================================================
+
+\subsection{Cost of Evasion}
+
+For a practical 5-user ring, an adversary must rotate device IDs, IP
+addresses, \emph{and} merchant relationships for all members before \wcc
+detection fails.  In practice: device ID rotation requires new physical
+hardware or emulators (\textasciitilde\$50--200/device); IP rotation is
+achievable via VPN or residential proxies (\textasciitilde\$5--20/month/IP);
+merchant rotation requires coordination with additional shell merchants---the
+highest operational cost.  Financial institutions should accordingly
+prioritize the integrity of merchant-side graph edges.
+
+\subsection{Temporal Window Constraints as a Defense}
+
+Our results motivate extending \wcc with \emph{temporal window constraints}:
+running \wcc only on edges created within a rolling 7- or 30-day window
+would force adversaries to maintain evasion continuously rather than
+executing a one-time rotation.  The simulation harness we release makes this
+straightforward to evaluate; we leave it as future work.
+
+\subsection{Limits of Laplace DP for Velocity Detection}
+
+The large sensitivity of $\texttt{tx\_sum}$ ($\Delta = \$500$) relative to
+the detection threshold (\$1{,}000) explains why DP noise dominates at
+low~$\eps$.  A more efficient approach would apply DP to normalized
+statistics (e.g., $\texttt{tx\_sum} / \Delta_{\mathrm{sum}} \in [0,1]$,
+sensitivity = $1/N$ for $N$ contributing users) or use smooth sensitivity
+\cite{nissim2007}.  Either approach would allow significantly tighter privacy
+budgets at the same utility level.
+
+%% ===================================================================
+\section{Related Work}
+%% ===================================================================
+
+\noindent\textbf{Graph-based fraud detection.}
+Akoglu et al.~\cite{akoglu2015} survey graph anomaly detection including
+\wcc-based methods.  Pourhabibi et al.~\cite{pourhabibi2020} provide a
+systematic review of graph-based fraud detection approaches.  Weber et
+al.~\cite{weber2019} apply GCNs to financial forensics on the Elliptic
+Bitcoin dataset; Liu et al.~\cite{liu2018heterogeneous} deploy heterogeneous
+graph neural networks for malicious account detection at Alibaba scale; Liu
+et al.~\cite{liu2021} address class imbalance in GNN fraud detection.  \wcc
+and community detection remain the most widely deployed production methods
+due to their simplicity and interpretability.
+
+\noindent\textbf{Adversarial attacks on graphs.}
+Z\"{u}gner et al.~\cite{zugner2018} introduce targeted adversarial
+perturbations for GNNs on node classification tasks.  Dai et
+al.~\cite{dai2018} formulate graph attacks as a reinforcement learning
+problem.  Our work differs in two ways: we study \wcc rather than learned
+classifiers, and we operate in a streaming setting where the adversary acts
+transaction-by-transaction without access to the full accumulated graph.
+
+\noindent\textbf{Differential privacy in ML systems.}
+Dwork and Roth~\cite{dwork2014} establish the algorithmic foundations of DP.
+Nissim et al.~\cite{nissim2007} introduce smooth sensitivity for tighter
+noise calibration.  Prior work applying DP to fraud classifiers focuses on
+training-time privacy; we apply DP to \emph{inference-time streaming
+aggregates}, a distinct and more practically relevant deployment scenario.
+
+%% ===================================================================
+\section{Conclusion}
+%% ===================================================================
+
+We present the first systematic adversarial robustness study of \wcc-based
+streaming fraud ring detection.
+
+\begin{enumerate}
+  \item \textbf{\wcc is surprisingly robust} due to multi-channel redundancy.
+        Breaking any single connection channel (device/IP \emph{or} merchant)
+        is insufficient to reduce recall below 1.000.
+  \item \textbf{Full evasion requires high adversarial cost.}  An attacker
+        must break all three connection channels for all ring members;
+        merchant evasion is particularly costly operationally.
+  \item \textbf{Differential privacy is deployable at $\eps \approx 5$}
+        for velocity detection: $\mathrm{TPR} = 1.0$, $\mathrm{FPR} = 0.027$.
+  \item \textbf{No existing graph defense} meaningfully improves \wcc
+        robustness under full evasion.  Temporal graph analysis is the most
+        promising direction for future work.
+\end{enumerate}
+
+All code, simulation harness, and results CSVs are available at
+\url{https://github.com/Cookie-Cat21/Temporal-Feature-Engine}.
+
+%% ===================================================================
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
+
+\end{document}

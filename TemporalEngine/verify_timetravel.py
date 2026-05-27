@@ -61,9 +61,9 @@ def check_iceberg_timetravel():
         )
 
         try:
-            table = catalog.load_table("db.transactions")
+            table = catalog.load_table("db.enriched_transactions")
         except Exception:
-            print("  ! Table 'db.transactions' not found — run the Flink processor first.")
+            print("  ! Table 'db.enriched_transactions' not found — run the Flink processor first.")
             return
 
         history = table.history()
