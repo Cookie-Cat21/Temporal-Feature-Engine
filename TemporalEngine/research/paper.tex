@@ -38,14 +38,18 @@
 
 \begin{abstract}
 Weakly Connected Component (\wcc) graph analysis is the dominant technique
-for real-time fraud ring detection in streaming financial systems, yet its
-adversarial robustness has not been systematically studied in a streaming
-context.  We present \sysname, a production-grade fraud detection platform
-built on Apache Flink, Memgraph, and LangGraph, and use it as an
-experimental testbed for two research questions: (1)~How does \wcc-based
-ring detection degrade under adversarial graph manipulation with a bounded
-budget?  (2)~What is the privacy-utility tradeoff when Laplace differential
-privacy is applied to co-located velocity detection?
+for real-time fraud ring detection in streaming financial systems.  Prior
+adversarial studies of community detection \cite{li2020adversarial,jia2020certified}
+target learned models on static social graphs; the streaming, rule-based,
+multi-relational \wcc deployments used in production fraud pipelines remain
+largely unstudied.  We present \sysname, a production-grade fraud detection
+platform built on Apache Flink, Memgraph, and LangGraph, and use it as an
+experimental testbed for two questions:
+(1)~How does \wcc-based ring detection degrade under adversarial graph
+manipulation when the attacker operates transaction-by-transaction across
+three independent connection channels (devices, IPs, merchants)?
+(2)~What is the privacy-utility tradeoff when Laplace differential
+privacy is applied to the co-located velocity detector?
 
 Our experiments (30 Monte Carlo trials per configuration) show that \wcc
 exhibits strong \emph{multi-channel redundancy}: breaking only device/IP
@@ -81,10 +85,13 @@ Despite widespread deployment, two questions remain underexplored:
 
 \textbf{Q1 (Adversarial Robustness).}  How many adversarial modifications
 must an attacker make to evade \wcc-based detection, and which connection
-channels are the weakest links?  Prior adversarial graph
-work~\cite{zugner2018,dai2018} operates on static graphs; we study the
-\emph{streaming} case where an attacker must operate in real-time without
-seeing the full accumulated graph state.
+channels are the weakest links?  Adversarial work on learned graph models
+\cite{zugner2018,dai2018,kim2024fraudgangs} and on community detection in
+social networks~\cite{li2020adversarial,jia2020certified} operates on static
+graphs and homogeneous edge types.  We study the \emph{streaming,
+multi-relational, rule-based} case characteristic of production fraud
+pipelines, where an attacker acts transaction-by-transaction and must
+simultaneously evade redundant connection channels.
 
 \textbf{Q2 (Privacy-Utility Tradeoff).}  Velocity detection---flagging
 users with anomalous transaction rates or volumes in a sliding window---is
@@ -98,13 +105,20 @@ detection system we build and open-source.  Our contributions are:
 
 \begin{enumerate}
   \item A reproducible simulation harness replicating a production \wcc
-        fraud ring detector (no Docker/Kafka stack required for experiments).
-  \item Three adversarial attack strategies with formal budget definitions,
-        evaluated across the full budget range~$B \in [0, N]$.
-  \item A differential privacy velocity detector with empirical
+        fraud ring detector over a multi-relational graph
+        (User--Device--IP--Merchant), runnable without a Docker/Kafka stack.
+  \item Five channel-aware adversarial strategies (single-channel,
+        multi-channel, and orthogonal velocity-throttle attacks), evaluated
+        across the full budget range $B \in [0,N]$ and revealing a
+        \emph{multi-channel redundancy} effect absent from prior single-edge-type
+        community-detection attacks~\cite{li2020adversarial}.
+  \item A differential privacy velocity detector applied to \emph{inference-time
+        streaming aggregates}---a setting distinct from the training-time
+        DP-SGD focus of prior privacy-preserving fraud work---with empirical
         privacy-utility curves across $\eps \in \{0.1, \ldots, 50\}$.
-  \item An empirical defense comparison: \wcc baseline
-        vs.\ AdaptiveThreshold vs.\ MultiSignalDetector.
+  \item An empirical defense comparison: \wcc baseline vs.\ AdaptiveThreshold
+        vs.\ MultiSignalDetector, demonstrating that the vulnerability is
+        \emph{structural} once all redundant channels are severed.
 \end{enumerate}
 
 %% ===================================================================
@@ -476,9 +490,24 @@ due to their simplicity and interpretability.
 Z\"{u}gner et al.~\cite{zugner2018} introduce targeted adversarial
 perturbations for GNNs on node classification tasks.  Dai et
 al.~\cite{dai2018} formulate graph attacks as a reinforcement learning
-problem.  Our work differs in two ways: we study \wcc rather than learned
-classifiers, and we operate in a streaming setting where the adversary acts
-transaction-by-transaction without access to the full accumulated graph.
+problem.  Kim et al.~\cite{kim2024fraudgangs} extend these ideas to
+GNN-based fraud detection with multi-target injection attacks.  All three
+operate on \emph{learned classifiers} and assume the attacker can observe
+or perturb a static graph snapshot.
+
+\noindent\textbf{Adversarial attacks on community detection.}
+Closest to our threat model, Li et al.~\cite{li2020adversarial} introduce
+adversarial attacks against community detection by hiding individuals in
+social graphs.  Jia et al.~\cite{jia2020certified} provide certified
+robustness bounds via randomized smoothing.  Our work differs in three
+key respects: (i)~we target \wcc applied to a \emph{multi-relational}
+graph (Users, Devices, IPs, Merchants) rather than a single edge type,
+exposing a redundancy effect absent from single-relation analyses;
+(ii)~we operate in a \emph{streaming, production} setting where each
+adversarial action is a real transaction subject to the live Flink
+pipeline; and (iii)~we evaluate alongside a co-located velocity detector,
+quantifying the orthogonality between graph-based and aggregate-based
+detection layers.
 
 \noindent\textbf{Differential privacy in ML systems.}
 Dwork and Roth~\cite{dwork2014} establish the algorithmic foundations of DP.
@@ -491,8 +520,12 @@ aggregates}, a distinct and more practically relevant deployment scenario.
 \section{Conclusion}
 %% ===================================================================
 
-We present the first systematic adversarial robustness study of \wcc-based
-streaming fraud ring detection.
+We present the first adversarial robustness study of \wcc-based fraud ring
+detection in a \emph{streaming, multi-relational, production} setting.
+Where prior community-detection adversarial work~\cite{li2020adversarial,
+jia2020certified} targets learned models on single-edge-type static graphs,
+our experiments expose a structural property unique to deployed \wcc
+pipelines: \emph{multi-channel redundancy} across heterogeneous edge types.
 
 \begin{enumerate}
   \item \textbf{\wcc is surprisingly robust} due to multi-channel redundancy.
