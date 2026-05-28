@@ -31,9 +31,11 @@ jobs:
         run: bandit -r TemporalEngine/ -x TemporalEngine/tests/ --severity-level medium
         
       - name: Lint Next.js Dashboard
+        # Dashboard lives at TemporalEngine/dashboard/, not the repo root.
+        # The whole block is non-fatal — dashboard lint is informational.
         run: |
-          cd dashboard
-          npm install --skip-install
+          cd TemporalEngine/dashboard || exit 0
+          npm ci --ignore-scripts || true
           npm run lint || true
 
   production-release:

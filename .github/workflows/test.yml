@@ -24,7 +24,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install pytest faker redis duckdb \
+          # `click` is added explicitly because the spaCy CLI imports it but
+          # newer pip resolvers do not always pull it transitively from spaCy's
+          # typer dependency.
+          pip install pytest faker redis duckdb click \
             presidio-analyzer presidio-anonymizer "spacy>=3,<4" \
             python-dotenv prometheus_client pandas pyarrow \
             langchain langchain-core langchain-openai langgraph neo4j \
