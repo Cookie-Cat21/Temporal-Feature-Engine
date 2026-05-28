@@ -10,7 +10,7 @@ Adversarial Robustness and Privacy-Utility Tradeoffs in Real-Time Graph-Based Fr
 
 ## Authors
 
-Ovindu Karunaratne
+Ovindu Karunaratne — ORCID: [0009-0006-3169-8941](https://orcid.org/0009-0006-3169-8941)
 
 ## Primary subject
 
