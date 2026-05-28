@@ -14,11 +14,19 @@ Ovindu Karunaratne — ORCID: [0009-0006-3169-8941](https://orcid.org/0009-0006-
 
 ## Primary subject
 
-cs.CR (Cryptography and Security)
+cs.LG (Machine Learning)
 
 ## Secondary subjects
 
-cs.LG (Machine Learning), cs.DB (Databases)
+cs.CR (Cryptography and Security), cs.DB (Databases)
+
+> **Why cs.LG primary, not cs.CR:** cs.LG has auto-endorsement for
+> first-time submitters; cs.CR requires manual endorsement by an
+> existing cs.CR author with ≥2 recent papers. The work fits both
+> categories — adversarial ML is a core cs.LG topic, and the
+> differential privacy + adversarial robustness angles map cleanly
+> to ML. Once the paper is live on cs.LG, cross-listing to cs.CR is
+> trivial and requires no endorsement.
 
 ---
 
@@ -76,17 +84,19 @@ preprints, no submission cost.
 - [ ] Confirm GitHub repo is public and the README points to research/
 - [ ] Replace email in paper.tex \author block if you want a different one
 - [ ] Upload paper.tex + refs.bib as a single .zip or .tar.gz to arXiv
-- [ ] Pick the moderation track: cs.CR moderators are responsive within 1–3
-      business days for first-time submitters
+- [ ] Submit under cs.LG (auto-endorsed); cross-list cs.CR + cs.DB after
+      the paper appears live (no endorsement needed for cross-listing)
 
 ## Strategic notes
 
 - arXiv first, conference second. KDD deadline is typically February;
   ACM SIGMOD May; IEEE S&P early summer. Posting on arXiv first
   establishes priority date and is allowed by all three venues.
-- For your first submission you'll need an endorsement from another
-  cs.CR author who has posted recently. If you don't have a contact,
-  the autoendorsement system kicks in after your first paper is
-  accepted in another category, OR you can email moderators.
+- Submitting under cs.LG avoids the endorsement bottleneck entirely:
+  cs.LG auto-endorses most first-time submitters. cs.CR does NOT —
+  it requires an endorser with >= 2 recent cs.CR papers. Post to cs.LG
+  first, then cross-list to cs.CR once live (cross-listing needs no
+  endorsement). If cs.LG unexpectedly asks for an endorser too, email
+  an author you cite (Li 2020 / Jia 2020 / Kim 2024) with the PDF.
 - Once posted, the paper gets a permanent arXiv ID like 2605.NNNNN.
   Add this ID to the GitHub README and to refs.bib for future citing.
