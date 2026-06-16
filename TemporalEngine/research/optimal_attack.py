@@ -22,6 +22,7 @@ Two questions:
     The optimal attacker reaches recall 0 at budget R*(m+1) = 60% here, whereas
     the random attacker needs ~100% (and at 60% still detects ~31% of rings).
 """
+
 import copy
 import random
 from math import ceil, floor
@@ -84,7 +85,10 @@ def partial_channel_check(n_trials: int = 30) -> None:
     for ALL ring users leaves recall at 1.0 (ring stays connected via the third).
     Uses the existing single-channel attacks composed pairwise.
     """
-    from attacks import DeviceIPRotation  # rotates device+IP (2 channels), leaves merchant
+    from attacks import (
+        DeviceIPRotation,
+    )  # rotates device+IP (2 channels), leaves merchant
+
     print("Per-user min-cut check (rotate 2 of 3 channels, 100% of users):")
     agg = 0.0
     for trial in range(n_trials):
@@ -94,30 +98,43 @@ def partial_channel_check(n_trials: int = 30) -> None:
         g = sc.build_graph(txs)
         m = evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, 0.5)
         agg += m["recall"]
-    print(f"  device+IP rotated, merchant intact -> recall={agg/n_trials:.3f} "
-          f"(stays 1.0 => need all 3 channels => min-cut per user = 3)\n")
+    print(
+        f"  device+IP rotated, merchant intact -> recall={agg / n_trials:.3f} "
+        f"(stays 1.0 => need all 3 channels => min-cut per user = 3)\n"
+    )
 
 
 def run_optimal_vs_random(n_trials: int = 30, k: int = 5, theta: float = 0.5) -> list:
     from attacks import FullEvasion
+
     per_ring = min_users_to_kill_ring(k, theta)
     R = 10  # n_rings default
     N = R * k
     budgets = [int(N * f) for f in [0, 0.2, 0.4, 0.6, 0.8, 1.0]]
 
-    print(f"Optimal vs random allocation (k={k}, theta={theta}, "
-          f"kill-threshold per ring={per_ring}):")
-    print(f"{'budget':>6} {'budget%':>8} {'random R':>10} {'optimal R':>10} "
-          f"{'opt(theory)':>12}")
+    print(
+        f"Optimal vs random allocation (k={k}, theta={theta}, "
+        f"kill-threshold per ring={per_ring}):"
+    )
+    print(
+        f"{'budget':>6} {'budget%':>8} {'random R':>10} {'optimal R':>10} "
+        f"{'opt(theory)':>12}"
+    )
     rows = []
     for B in budgets:
         # random heuristic
         rnd = 0.0
         for trial in range(n_trials):
             sc = Scenario(n_benign_users=30, seed=trial * 137)
-            txs = FullEvasion().apply(sc, sc.transactions, B) if B > 0 else sc.transactions
+            txs = (
+                FullEvasion().apply(sc, sc.transactions, B)
+                if B > 0
+                else sc.transactions
+            )
             g = sc.build_graph(txs)
-            rnd += evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, theta)["recall"]
+            rnd += evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, theta)[
+                "recall"
+            ]
         rnd /= n_trials
         # optimal allocation
         opt = 0.0
@@ -126,14 +143,21 @@ def run_optimal_vs_random(n_trials: int = 30, k: int = 5, theta: float = 0.5) ->
             sc = Scenario(n_benign_users=30, seed=trial * 137)
             txs = atk.apply(sc, sc.transactions, B) if B > 0 else sc.transactions
             g = sc.build_graph(txs)
-            opt += evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, theta)["recall"]
+            opt += evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, theta)[
+                "recall"
+            ]
         opt /= n_trials
         theory = optimal_recall_closed_form(B, R, per_ring)
-        rows.append({"budget": B, "budget_pct": round(B / N, 3),
-                     "recall_random": round(rnd, 4),
-                     "recall_optimal": round(opt, 4),
-                     "recall_optimal_theory": round(theory, 4)})
-        print(f"{B:>6} {B/N:>7.0%} {rnd:>10.3f} {opt:>10.3f} {theory:>12.3f}")
+        rows.append(
+            {
+                "budget": B,
+                "budget_pct": round(B / N, 3),
+                "recall_random": round(rnd, 4),
+                "recall_optimal": round(opt, 4),
+                "recall_optimal_theory": round(theory, 4),
+            }
+        )
+        print(f"{B:>6} {B / N:>7.0%} {rnd:>10.3f} {opt:>10.3f} {theory:>12.3f}")
     return rows
 
 
@@ -141,7 +165,8 @@ def save_csv(rows, path):
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader(); w.writerows(rows)
+        w.writeheader()
+        w.writerows(rows)
     print(f"  Saved -> {path}")
 
 

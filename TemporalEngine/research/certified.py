@@ -20,6 +20,7 @@ sound by construction; we also confirm it against random attacks. We then show:
   * under DENSE co-location (members share a common hub), R_cert = m (optimal);
   * the deterministic R_cert is exact (confidence 1.0), unlike smoothing.
 """
+
 from math import ceil
 from itertools import combinations
 from pathlib import Path
@@ -36,6 +37,7 @@ RESULTS_DIR = Path(__file__).parent / "results"
 
 
 # --------- exact deterministic certificate from ring structure --------------
+
 
 def _ring_assignment(scenario, ring):
     """Map each ring user -> the set of infra nodes it touches, from the txns."""
@@ -84,20 +86,29 @@ def sparse_vs_dense(theta=0.5):
         dense_assign = {u: {"HUB"} for u in ring.users}
         r_dense = exact_cert_radius(ring.users, dense_assign, theta)
         print(f"{k:>4} {naive_bound(k, theta):>8} {r_sparse:>14} {r_dense:>18}")
-        rows.append({"k": k, "naive_m": naive_bound(k, theta),
-                     "Rcert_sparse": r_sparse, "Rcert_dense": r_dense})
+        rows.append(
+            {
+                "k": k,
+                "naive_m": naive_bound(k, theta),
+                "Rcert_sparse": r_sparse,
+                "Rcert_dense": r_dense,
+            }
+        )
     return rows
 
 
 def verify_soundness(theta=0.5, n_trials=300):
     """Random attacks at each ring's exact certified radius must keep recall 1.0."""
     import copy
+
     k = 6
     sc0 = Scenario(n_rings=10, users_per_ring=k, n_benign_users=30, seed=0)
     # exact per-ring radius (same structure across seeds since assignment is seeded)
     radii = {}
     for ring in sc0.ground_truth:
-        radii[ring.ring_id] = exact_cert_radius(ring.users, _ring_assignment(sc0, ring), theta)
+        radii[ring.ring_id] = exact_cert_radius(
+            ring.users, _ring_assignment(sc0, ring), theta
+        )
     rmin = min(radii.values())
     worst = 1.0
     for trial in range(n_trials):
@@ -106,28 +117,41 @@ def verify_soundness(theta=0.5, n_trials=300):
         targets = set()
         for ring in sc.ground_truth:
             r = radii[ring.ring_id]
-            targets.update(rnd.sample(ring.users, r))   # attack AT the radius
+            targets.update(rnd.sample(ring.users, r))  # attack AT the radius
         txs, c = [], 0
         for tx in copy.deepcopy(sc.transactions):
             if tx.user_id in targets:
-                tx.device_id = f"a{c}"; tx.ip_address = f"b{c}"; tx.merchant_id = f"m{c}"; c += 1
+                tx.device_id = f"a{c}"
+                tx.ip_address = f"b{c}"
+                tx.merchant_id = f"m{c}"
+                c += 1
             txs.append(tx)
         g = sc.build_graph(txs)
-        worst = min(worst, evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, theta)["recall"])
-    print(f"\nSoundness (k={k}, exact per-ring radii, min={rmin}): worst-case recall "
-          f"over {n_trials} random attacks at the certified radius = {worst:.3f} "
-          f"{'OK' if worst == 1.0 else 'VIOLATED'}")
+        worst = min(
+            worst,
+            evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, theta)[
+                "recall"
+            ],
+        )
+    print(
+        f"\nSoundness (k={k}, exact per-ring radii, min={rmin}): worst-case recall "
+        f"over {n_trials} random attacks at the certified radius = {worst:.3f} "
+        f"{'OK' if worst == 1.0 else 'VIOLATED'}"
+    )
     return worst
 
 
 # --------------------- randomized-ablation (probabilistic) ------------------
+
 
 def clopper_pearson_lower(s, n, alpha=0.001):
     return 0.0 if s == 0 else beta.ppf(alpha, s, n - s + 1)
 
 
 def smoothing_radius(k, q=0.8, theta=0.5, n_smooth=4000, alpha=0.001, seed=0):
-    rnd = random.Random(seed); need = ceil(theta * k); succ = 0
+    rnd = random.Random(seed)
+    need = ceil(theta * k)
+    succ = 0
     for _ in range(n_smooth):
         if sum(1 for _ in range(k) if rnd.random() < q) >= need:
             succ += 1
@@ -142,18 +166,24 @@ def smoothing_radius(k, q=0.8, theta=0.5, n_smooth=4000, alpha=0.001, seed=0):
 
 def realistic_summary(theta=0.5):
     sc = RealisticScenario(seed=0)
-    radii = [exact_cert_radius(r.users, _ring_assignment(sc, r), theta) for r in sc.ground_truth]
+    radii = [
+        exact_cert_radius(r.users, _ring_assignment(sc, r), theta)
+        for r in sc.ground_truth
+    ]
     pos = sum(1 for r in radii if r >= 1)
-    print(f"\nRealistic population ({len(radii)} rings, sizes "
-          f"{min(sc.ring_sizes)}-{max(sc.ring_sizes)}): {pos}/{len(radii)} certifiable "
-          f"(R_cert>=1); mean exact radius = {sum(radii)/len(radii):.2f} users.")
+    print(
+        f"\nRealistic population ({len(radii)} rings, sizes "
+        f"{min(sc.ring_sizes)}-{max(sc.ring_sizes)}): {pos}/{len(radii)} certifiable "
+        f"(R_cert>=1); mean exact radius = {sum(radii) / len(radii):.2f} users."
+    )
 
 
 def save_csv(rows, path):
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader(); w.writerows(rows)
+        w.writeheader()
+        w.writerows(rows)
     print(f"  Saved -> {path}")
 
 

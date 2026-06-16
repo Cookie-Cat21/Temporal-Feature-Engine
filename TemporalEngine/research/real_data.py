@@ -39,6 +39,7 @@ Usage:
   python real_data.py --demo                 # writes + runs a demo CSV (no download)
   python real_data.py --csv path/to/data.csv [--theta 0.5] [--trials 20]
 """
+
 import argparse
 import csv
 import random
@@ -57,13 +58,13 @@ def load_edges(path):
         reader = csv.DictReader(f)
         cols = set(reader.fieldnames or [])
         edges, fraud = [], set()
-        if {"user_id", "entity_id"} <= cols:                       # schema B
+        if {"user_id", "entity_id"} <= cols:  # schema B
             for r in reader:
-                u, e = r["user_id"], f"{r.get('entity_type','e')}:{r['entity_id']}"
+                u, e = r["user_id"], f"{r.get('entity_type', 'e')}:{r['entity_id']}"
                 edges.append((u, e))
                 if str(r.get("is_fraud", "0")) in ("1", "True", "true"):
                     fraud.add(u)
-        elif "user_id" in cols:                                    # schema A
+        elif "user_id" in cols:  # schema A
             for r in reader:
                 u = r["user_id"]
                 for ch in ("merchant_id", "device_id", "ip_address"):
@@ -100,7 +101,8 @@ def load_ibm_aml(path, max_rows=None):
             launder = str(r.get("Is Laundering", "0")).strip() == "1"
             rows.append((src, dst, launder))
             if launder:
-                fraud.add(src); fraud.add(dst)
+                fraud.add(src)
+                fraud.add(dst)
     edges = [(src, f"acct:{dst}") for src, dst, _ in rows if src in fraud]
     return edges, fraud
 
@@ -118,7 +120,9 @@ def ground_truth_rings(G, fraud_users, min_users=3):
     """Connected components containing >= min_users fraud users -> ring user-sets."""
     rings = []
     for comp in nx.connected_components(G):
-        users = {n for n in comp if G.nodes[n].get("kind") == "user" and n in fraud_users}
+        users = {
+            n for n in comp if G.nodes[n].get("kind") == "user" and n in fraud_users
+        }
         if len(users) >= min_users:
             rings.append(users)
     return rings
@@ -143,7 +147,9 @@ def iou_recall(detected, gt, theta):
             if i in matched:
                 continue
             if g and len(d & g) / len(d | g) >= theta:
-                tp += 1; matched.add(i); break
+                tp += 1
+                matched.add(i)
+                break
     return tp / len(gt) if gt else 0.0
 
 
@@ -153,7 +159,8 @@ def full_evasion(edges, fraud_users, targets):
     c = 0
     for u, e in edges:
         if u in targets:
-            out.append((u, f"__evaded_{c}")); c += 1
+            out.append((u, f"__evaded_{c}"))
+            c += 1
         else:
             out.append((u, e))
     return out
@@ -173,8 +180,10 @@ def run_edges(edges, fraud, theta=0.5, n_trials=20):
     if not gt:
         print("No rings (>=3 fraud users sharing an entity) found in this data.")
         return []
-    print(f"{G0.number_of_nodes()} nodes, {len(fraud)} fraud users, "
-          f"{len(gt)} rings (sizes {min(ring_sizes)}-{max(ring_sizes)}, N={N})")
+    print(
+        f"{G0.number_of_nodes()} nodes, {len(fraud)} fraud users, "
+        f"{len(gt)} rings (sizes {min(ring_sizes)}-{max(ring_sizes)}, N={N})"
+    )
     print(f"{'budget%':>8} {'measured':>10} {'mixed-model':>12} {'abs.err':>8}")
     rows = []
     fraud_list = sorted(fraud_in_rings)
@@ -188,15 +197,17 @@ def run_edges(edges, fraud, theta=0.5, n_trials=20):
             meas += iou_recall(detect_rings(G), gt, theta)
         meas /= n_trials
         pred = predicted_recall_mixed(ring_sizes, N, B, theta)
-        print(f"{f:>7.0%} {meas:>10.3f} {pred:>12.3f} {abs(meas-pred):>8.3f}")
-        rows.append({"budget_pct": f, "measured": round(meas, 4),
-                     "mixed_model": round(pred, 4)})
+        print(f"{f:>7.0%} {meas:>10.3f} {pred:>12.3f} {abs(meas - pred):>8.3f}")
+        rows.append(
+            {"budget_pct": f, "measured": round(meas, 4), "mixed_model": round(pred, 4)}
+        )
     return rows
 
 
 def write_demo_csv(path):
     """Emit a schema-B demo CSV from the realistic generator (no download needed)."""
     from realistic import RealisticScenario
+
     sc = RealisticScenario(seed=7)
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
@@ -213,15 +224,20 @@ def save_csv(rows, path):
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader(); w.writerows(rows)
+        w.writeheader()
+        w.writerows(rows)
     print(f"  Saved -> {path}")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", type=str, default=None)
-    ap.add_argument("--ibm-aml", type=str, default=None,
-                    help="path to IBM AML HI-Small_Trans.csv (uses the adapter)")
+    ap.add_argument(
+        "--ibm-aml",
+        type=str,
+        default=None,
+        help="path to IBM AML HI-Small_Trans.csv (uses the adapter)",
+    )
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--theta", type=float, default=0.5)
     ap.add_argument("--trials", type=int, default=20)

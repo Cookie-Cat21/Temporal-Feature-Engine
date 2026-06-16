@@ -34,6 +34,7 @@ So the defense holds whenever the detection window exceeds the attacker's
 sustained-evasion duration. This is the tunable design rule the static
 defenses lack.
 """
+
 import copy
 import random
 from dataclasses import dataclass
@@ -54,7 +55,7 @@ class TemporalTx:
     merchant_id: str
     device_id: str
     ip_address: str
-    t: int                # integer timestep
+    t: int  # integer timestep
     is_fraud: bool = False
     ring_id: int = -1
 
@@ -85,29 +86,38 @@ class TemporalScenario:
         self.transactions: List[TemporalTx] = []
 
         for ring_id in range(n_rings):
-            users     = [f"fr_{ring_id}_u{i}" for i in range(users_per_ring)]
-            devices   = [f"fr_{ring_id}_d{i}" for i in range(shared_devices_per_ring)]
-            ips       = [f"fr_{ring_id}_ip{i}" for i in range(shared_ips_per_ring)]
+            users = [f"fr_{ring_id}_u{i}" for i in range(users_per_ring)]
+            devices = [f"fr_{ring_id}_d{i}" for i in range(shared_devices_per_ring)]
+            ips = [f"fr_{ring_id}_ip{i}" for i in range(shared_ips_per_ring)]
             merchants = [f"fr_{ring_id}_m{i}" for i in range(merchants_per_ring)]
-            self.ground_truth.append(GroundTruthRing(ring_id, users, devices, ips, merchants))
+            self.ground_truth.append(
+                GroundTruthRing(ring_id, users, devices, ips, merchants)
+            )
             for u in users:
                 for t in range(history_len):
-                    self.transactions.append(TemporalTx(
-                        user_id=u,
-                        merchant_id=random.choice(merchants),
-                        device_id=random.choice(devices),
-                        ip_address=random.choice(ips),
-                        t=t, is_fraud=True, ring_id=ring_id,
-                    ))
+                    self.transactions.append(
+                        TemporalTx(
+                            user_id=u,
+                            merchant_id=random.choice(merchants),
+                            device_id=random.choice(devices),
+                            ip_address=random.choice(ips),
+                            t=t,
+                            is_fraud=True,
+                            ring_id=ring_id,
+                        )
+                    )
         for i in range(n_benign_users):
             for t in range(history_len):
-                self.transactions.append(TemporalTx(
-                    user_id=f"benign_u{i}",
-                    merchant_id=f"benign_m{i}",
-                    device_id=f"benign_d{i}",
-                    ip_address=f"benign_ip{i}",
-                    t=t, is_fraud=False,
-                ))
+                self.transactions.append(
+                    TemporalTx(
+                        user_id=f"benign_u{i}",
+                        merchant_id=f"benign_m{i}",
+                        device_id=f"benign_d{i}",
+                        ip_address=f"benign_ip{i}",
+                        t=t,
+                        is_fraud=False,
+                    )
+                )
 
     @property
     def fraud_user_sets(self) -> List[Set[str]]:
@@ -123,7 +133,9 @@ class TemporalFullEvasion:
 
     name = "temporal_full_evasion"
 
-    def apply(self, scenario: TemporalScenario, budget: int, onset: int) -> List[TemporalTx]:
+    def apply(
+        self, scenario: TemporalScenario, budget: int, onset: int
+    ) -> List[TemporalTx]:
         all_fraud = [u for r in scenario.ground_truth for u in r.users]
         random.shuffle(all_fraud)
         targets = set(all_fraud[:budget])
@@ -131,8 +143,8 @@ class TemporalFullEvasion:
         c = 0
         for tx in txs:
             if tx.user_id in targets and tx.t >= onset:
-                tx.device_id   = f"eva_dev_{c}"
-                tx.ip_address  = f"eva_ip_{c}"
+                tx.device_id = f"eva_dev_{c}"
+                tx.ip_address = f"eva_ip_{c}"
                 tx.merchant_id = f"eva_merch_{c}"
                 c += 1
         return txs
@@ -145,7 +157,7 @@ class TemporalWindowDetector:
 
     def __init__(self, window: int, history_len: int):
         self.window = window
-        self.cutoff = history_len - window     # keep timesteps t >= cutoff
+        self.cutoff = history_len - window  # keep timesteps t >= cutoff
 
     def detect_rings(self, txs: List[TemporalTx]) -> List[Set[str]]:
         G = nx.Graph()
@@ -170,7 +182,7 @@ class TemporalWindowDetector:
 
 def run_temporal_experiment(
     history_len: int = 10,
-    sustained_evasion: int = 4,   # D: attacker has been dark for D steps
+    sustained_evasion: int = 4,  # D: attacker has been dark for D steps
     n_trials: int = 30,
     iou_threshold: float = 0.5,
 ) -> list:
@@ -184,25 +196,31 @@ def run_temporal_experiment(
         agg = {"precision": 0.0, "recall": 0.0, "f1": 0.0}
         for trial in range(n_trials):
             sc = TemporalScenario(history_len=history_len, seed=trial * 137)
-            budget = sc.n_rings * sc.users_per_ring        # 100% budget
+            budget = sc.n_rings * sc.users_per_ring  # 100% budget
             txs = TemporalFullEvasion().apply(sc, budget, onset)
             det = TemporalWindowDetector(window=W, history_len=history_len)
             detected = det.detect_rings(txs)
             m = evaluate_detection(detected, sc.fraud_user_sets, iou_threshold)
             for k in agg:
                 agg[k] += m[k]
-        row = {"window": W, "sustained_evasion_D": sustained_evasion,
-               **{k: round(v / n_trials, 4) for k, v in agg.items()}}
+        row = {
+            "window": W,
+            "sustained_evasion_D": sustained_evasion,
+            **{k: round(v / n_trials, 4) for k, v in agg.items()},
+        }
         rows.append(row)
-        print(f"  [W={W:2d}  D={sustained_evasion}] "
-              f"P={row['precision']:.3f} R={row['recall']:.3f} F1={row['f1']:.3f}"
-              f"   {'<-- recovers (W>D)' if W > sustained_evasion else ''}")
+        print(
+            f"  [W={W:2d}  D={sustained_evasion}] "
+            f"P={row['precision']:.3f} R={row['recall']:.3f} F1={row['f1']:.3f}"
+            f"   {'<-- recovers (W>D)' if W > sustained_evasion else ''}"
+        )
     return rows
 
 
 def make_figure(rows: list) -> None:
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:

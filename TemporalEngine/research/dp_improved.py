@@ -23,13 +23,20 @@ privacy budget each saves at equal utility:
 
 We reuse the same ground-truth windows as dp.py for a like-for-like comparison.
 """
+
 import math
 import random
 from pathlib import Path
 import csv
 
-from dp import (UserWindow, generate_windows, laplace_noise,
-                COUNT_THRESHOLD, SUM_THRESHOLD, MAX_AMOUNT)
+from dp import (
+    UserWindow,
+    generate_windows,
+    laplace_noise,
+    COUNT_THRESHOLD,
+    SUM_THRESHOLD,
+    MAX_AMOUNT,
+)
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
@@ -53,7 +60,7 @@ def flag_count_primary(w: UserWindow, eps: float) -> str:
 def flag_clipped_sum(w: UserWindow, eps: float, clip: float = 100.0) -> str:
     # Split eps across the two queries (basic composition).
     nc = w.tx_count + laplace_noise(1.0, eps / 2)
-    ns = w.tx_sum + laplace_noise(clip, eps / 2)   # sensitivity reduced 500 -> clip
+    ns = w.tx_sum + laplace_noise(clip, eps / 2)  # sensitivity reduced 500 -> clip
     return "HIGH" if (nc > COUNT_THRESHOLD or ns > SUM_THRESHOLD) else "NORMAL"
 
 
@@ -65,9 +72,9 @@ def flag_gaussian(w: UserWindow, eps: float, delta: float = 1e-5) -> str:
 
 MECHANISMS = {
     "baseline_laplace": flag_baseline,
-    "count_primary":    flag_count_primary,
+    "count_primary": flag_count_primary,
     "clipped_sum_c100": lambda w, e: flag_clipped_sum(w, e, clip=100.0),
-    "gaussian":         flag_gaussian,
+    "gaussian": flag_gaussian,
 }
 
 
@@ -84,16 +91,26 @@ def run(eps_values=None, n_trials=50, seed=42) -> list:
                 for w in windows:
                     pred = fn(w, eps)
                     true = w.true_label
-                    if true == "HIGH" and pred == "HIGH": tp += 1
-                    elif true == "HIGH": fn_ += 1
-                    elif pred == "HIGH": fp += 1
-                    else: tn += 1
+                    if true == "HIGH" and pred == "HIGH":
+                        tp += 1
+                    elif true == "HIGH":
+                        fn_ += 1
+                    elif pred == "HIGH":
+                        fp += 1
+                    else:
+                        tn += 1
             tpr = tp / (tp + fn_) if (tp + fn_) else 0.0
             fpr = fp / (fp + tn) if (fp + tn) else 0.0
             acc = (tp + tn) / (n_trials * len(windows))
-            rows.append({"mechanism": name, "epsilon": eps,
-                         "tpr": round(tpr, 4), "fpr": round(fpr, 4),
-                         "accuracy": round(acc, 4)})
+            rows.append(
+                {
+                    "mechanism": name,
+                    "epsilon": eps,
+                    "tpr": round(tpr, 4),
+                    "fpr": round(fpr, 4),
+                    "accuracy": round(acc, 4),
+                }
+            )
     return rows
 
 
@@ -110,33 +127,47 @@ def summarize(rows):
             cells.append(f"{r['fpr']:>17.4f}")
         print(f"{eps:>8} " + " ".join(cells))
     # Find eps where each mechanism first reaches baseline's eps=5 FPR.
-    base5 = next(r["fpr"] for r in rows if r["mechanism"] == "baseline_laplace" and r["epsilon"] == 5.0)
-    print(f"\nBaseline reaches FPR={base5:.4f} only at eps=5. Epsilon at which each "
-          f"mechanism first matches/beats that FPR:")
+    base5 = next(
+        r["fpr"]
+        for r in rows
+        if r["mechanism"] == "baseline_laplace" and r["epsilon"] == 5.0
+    )
+    print(
+        f"\nBaseline reaches FPR={base5:.4f} only at eps=5. Epsilon at which each "
+        f"mechanism first matches/beats that FPR:"
+    )
     for m in mechs:
         hit = None
         for eps in eps_values:
             r = next(x for x in rows if x["mechanism"] == m and x["epsilon"] == eps)
             if r["fpr"] <= base5 + 1e-9:
-                hit = eps; break
+                hit = eps
+                break
         print(f"  {m:>17}: eps={hit}")
 
 
 def make_figure(rows):
     try:
-        import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
     except ImportError:
         return
     fig, ax = plt.subplots(figsize=(6, 4))
     for m in MECHANISMS:
         pts = sorted([(r["epsilon"], r["fpr"]) for r in rows if r["mechanism"] == m])
         ax.plot([e for e, _ in pts], [f for _, f in pts], "o-", label=m)
-    ax.set_xscale("log"); ax.set_xlabel("Privacy budget ε (log)")
+    ax.set_xscale("log")
+    ax.set_xlabel("Privacy budget ε (log)")
     ax.set_ylabel("False-positive rate")
     ax.set_title("Improved DP mechanisms vs. baseline (lower FPR = better)")
-    ax.legend(fontsize=8); ax.grid(alpha=0.3, which="both")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3, which="both")
     out = RESULTS_DIR / "dp_improved.png"
-    RESULTS_DIR.mkdir(exist_ok=True); fig.tight_layout(); fig.savefig(out, dpi=150)
+    RESULTS_DIR.mkdir(exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(out, dpi=150)
     print(f"  Saved figure -> {out}")
 
 
@@ -144,7 +175,8 @@ def save_csv(rows, path):
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader(); w.writerows(rows)
+        w.writeheader()
+        w.writerows(rows)
     print(f"  Saved -> {path}")
 
 

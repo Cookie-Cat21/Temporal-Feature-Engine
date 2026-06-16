@@ -14,6 +14,7 @@ Statistical rigor and scale validation (B5).
     as ring size k grows (the hypergeometric tail concentrates). We validate the
     k=10 prediction empirically and contrast with k=5.
 """
+
 import math
 from pathlib import Path
 import csv
@@ -28,11 +29,20 @@ RESULTS_DIR = Path(__file__).parent / "results"
 def _trial_recalls(attack, budget, n_rings, k, n_benign, n_trials, theta):
     vals = []
     for trial in range(n_trials):
-        sc = Scenario(n_rings=n_rings, users_per_ring=k,
-                      n_benign_users=n_benign, seed=trial * 137)
-        txs = attack.apply(sc, sc.transactions, budget) if (attack and budget > 0) else sc.transactions
+        sc = Scenario(
+            n_rings=n_rings, users_per_ring=k, n_benign_users=n_benign, seed=trial * 137
+        )
+        txs = (
+            attack.apply(sc, sc.transactions, budget)
+            if (attack and budget > 0)
+            else sc.transactions
+        )
         g = sc.build_graph(txs)
-        vals.append(evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, theta)["recall"])
+        vals.append(
+            evaluate_detection(g.detect_rings_wcc(), sc.fraud_user_sets, theta)[
+                "recall"
+            ]
+        )
     return vals
 
 
@@ -52,13 +62,25 @@ def run_ci(n_trials=100, k=5, n_rings=10, n_benign=30, theta=0.5):
     rows = []
     atk = FullEvasion()
     for B in budgets:
-        vals = _trial_recalls(atk if B > 0 else None, B, n_rings, k, n_benign, n_trials, theta)
+        vals = _trial_recalls(
+            atk if B > 0 else None, B, n_rings, k, n_benign, n_trials, theta
+        )
         mean, half = ci95(vals)
         pred = predicted_recall(B, N, k, theta)
-        print(f"{B/N:>7.0%} {mean:>8.3f} {f'[{mean-half:.3f},{mean+half:.3f}]':>16} {pred:>8.3f}")
-        rows.append({"k": k, "N": N, "budget": B, "budget_pct": round(B/N, 3),
-                     "recall_mean": round(mean, 4), "ci95_half": round(half, 4),
-                     "model": round(pred, 4)})
+        print(
+            f"{B / N:>7.0%} {mean:>8.3f} {f'[{mean - half:.3f},{mean + half:.3f}]':>16} {pred:>8.3f}"
+        )
+        rows.append(
+            {
+                "k": k,
+                "N": N,
+                "budget": B,
+                "budget_pct": round(B / N, 3),
+                "recall_mean": round(mean, 4),
+                "ci95_half": round(half, 4),
+                "model": round(pred, 4),
+            }
+        )
     return rows
 
 
@@ -69,12 +91,24 @@ def run_scale(n_trials=20, theta=0.5):
     for n_rings, k in [(10, 5), (100, 5), (200, 5)]:
         N = n_rings * k
         B = int(0.6 * N)
-        vals = _trial_recalls(FullEvasion(), B, n_rings, k, n_rings * 3, n_trials, theta)
+        vals = _trial_recalls(
+            FullEvasion(), B, n_rings, k, n_rings * 3, n_trials, theta
+        )
         mean = sum(vals) / len(vals)
         pred = predicted_recall(B, N, k, theta)
-        print(f"{f'{n_rings} rings x {k} (N={N})':>22} {mean:>10.3f} {pred:>8.3f} {abs(mean-pred):>8.3f}")
-        rows.append({"n_rings": n_rings, "k": k, "N": N, "budget_pct": 0.6,
-                     "recall_mean": round(mean, 4), "model": round(pred, 4)})
+        print(
+            f"{f'{n_rings} rings x {k} (N={N})':>22} {mean:>10.3f} {pred:>8.3f} {abs(mean - pred):>8.3f}"
+        )
+        rows.append(
+            {
+                "n_rings": n_rings,
+                "k": k,
+                "N": N,
+                "budget_pct": 0.6,
+                "recall_mean": round(mean, 4),
+                "model": round(pred, 4),
+            }
+        )
     return rows
 
 
@@ -91,8 +125,15 @@ def run_ringsize(n_trials=40, theta=0.5):
             mean = sum(vals) / len(vals)
             pred = predicted_recall(B, N, k, theta)
             print(f"{k:>3} {f:>7.0%} {mean:>10.3f} {pred:>8.3f}")
-            rows.append({"k": k, "N": N, "budget_pct": f,
-                         "recall_mean": round(mean, 4), "model": round(pred, 4)})
+            rows.append(
+                {
+                    "k": k,
+                    "N": N,
+                    "budget_pct": f,
+                    "recall_mean": round(mean, 4),
+                    "model": round(pred, 4),
+                }
+            )
         print()
     return rows
 
@@ -101,7 +142,8 @@ def save_csv(rows, path):
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader(); w.writerows(rows)
+        w.writeheader()
+        w.writerows(rows)
     print(f"  Saved -> {path}")
 
 

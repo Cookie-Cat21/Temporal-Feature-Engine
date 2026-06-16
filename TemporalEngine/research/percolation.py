@@ -28,6 +28,7 @@ users that fall in the budget is Hypergeometric(N, k, B), so the EXPECTED RECALL
 This is a parameter-free prediction: given (N, k, theta) it outputs the entire
 recall-vs-budget curve with NO fitting. Compare to results/adversarial.csv.
 """
+
 from math import comb, ceil
 from pathlib import Path
 import csv
@@ -92,19 +93,25 @@ def critical_budget_fraction(k: int, theta: float = 0.5) -> float:
 def validate_against_csv(N: int = 50, k: int = 5, theta: float = 0.5) -> None:
     """Print predicted vs measured recall for the full_evasion rows of adversarial.csv."""
     path = RESULTS_DIR / "adversarial.csv"
-    print(f"Coverage model:  N={N}, k={k}, theta={theta}, "
-          f"tolerance m={evasion_tolerance(k, theta)}, "
-          f"critical budget ~{critical_budget_fraction(k, theta):.0%}")
+    print(
+        f"Coverage model:  N={N}, k={k}, theta={theta}, "
+        f"tolerance m={evasion_tolerance(k, theta)}, "
+        f"critical budget ~{critical_budget_fraction(k, theta):.0%}"
+    )
     print("-" * 60)
-    print(f"{'budget':>6} {'budget%':>8} {'predicted':>10} {'measured':>10} {'abs.err':>8}")
+    print(
+        f"{'budget':>6} {'budget%':>8} {'predicted':>10} {'measured':>10} {'abs.err':>8}"
+    )
     if not path.exists():
         print(f"(run evaluate.py first to generate {path})")
         return
     with open(path) as f:
         rows = [r for r in csv.DictReader(f) if r["strategy"] == "full_evasion"]
     # include the baseline (budget 0) as the anchor
-    print(f"{0:>6} {0.0:>7.0%} {predicted_recall(0,N,k,theta):>10.3f} "
-          f"{1.000:>10.3f} {abs(predicted_recall(0,N,k,theta)-1.0):>8.3f}")
+    print(
+        f"{0:>6} {0.0:>7.0%} {predicted_recall(0, N, k, theta):>10.3f} "
+        f"{1.000:>10.3f} {abs(predicted_recall(0, N, k, theta) - 1.0):>8.3f}"
+    )
     max_err = 0.0
     for r in rows:
         B = int(r["budget"])
@@ -112,7 +119,7 @@ def validate_against_csv(N: int = 50, k: int = 5, theta: float = 0.5) -> None:
         pred = predicted_recall(B, N, k, theta)
         err = abs(pred - meas)
         max_err = max(max_err, err)
-        print(f"{B:>6} {B/N:>7.0%} {pred:>10.3f} {meas:>10.3f} {err:>8.3f}")
+        print(f"{B:>6} {B / N:>7.0%} {pred:>10.3f} {meas:>10.3f} {err:>8.3f}")
     print("-" * 60)
     print(f"max abs error across all budgets: {max_err:.3f}")
 
@@ -120,6 +127,7 @@ def validate_against_csv(N: int = 50, k: int = 5, theta: float = 0.5) -> None:
 def make_figure(N: int = 50, k: int = 5, theta: float = 0.5) -> None:
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
@@ -142,10 +150,20 @@ def make_figure(N: int = 50, k: int = 5, theta: float = 0.5) -> None:
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(xs, ys, "-", lw=2, label=f"Coverage model (k={k}, θ={theta}, no fit)")
     if measured:
-        ax.plot([x for x, _ in measured], [y for _, y in measured],
-                "o", ms=7, label="Measured (30 MC trials)")
-    ax.axvline(100 * critical_budget_fraction(k, theta), ls="--", c="grey", lw=1,
-               label=f"Predicted transition (~{critical_budget_fraction(k, theta):.0%})")
+        ax.plot(
+            [x for x, _ in measured],
+            [y for _, y in measured],
+            "o",
+            ms=7,
+            label="Measured (30 MC trials)",
+        )
+    ax.axvline(
+        100 * critical_budget_fraction(k, theta),
+        ls="--",
+        c="grey",
+        lw=1,
+        label=f"Predicted transition (~{critical_budget_fraction(k, theta):.0%})",
+    )
     ax.set_xlabel("Adversarial budget (% of ring members fully evaded)")
     ax.set_ylabel("Ring-detection recall")
     ax.set_title("Full evasion: closed-form coverage model vs. measurement")
