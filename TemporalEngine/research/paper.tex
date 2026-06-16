@@ -6,6 +6,9 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{amsmath}
+% acmart loads newtxmath, which already defines \Bbbk. Relax it before
+% amssymb so the two do not clash ("Command \Bbbk already defined").
+\let\Bbbk\relax
 \usepackage{amssymb}
 \usepackage{xspace}
 \usepackage{hyperref}
