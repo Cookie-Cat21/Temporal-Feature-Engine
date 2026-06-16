@@ -57,6 +57,30 @@ def recall_curve(N: int, k: int, theta: float = 0.5, step: int = 1):
     return [(B, predicted_recall(B, N, k, theta)) for B in range(0, N + 1, step)]
 
 
+def predicted_recall_mixed(ring_sizes, N: int, B: int, theta: float = 0.5) -> float:
+    """
+    Generalized coverage model for a population of rings with HETEROGENEOUS sizes
+    (the realistic case). Expected recall = mean over rings of the per-ring
+    survival probability under a global budget B spread over N total fraud users:
+
+        Recall = (1/R) * sum_r P[ Hypergeom(N, k_r, B) <= m_r ],  m_r = k_r-ceil(theta*k_r)
+
+    This is the form needed to apply the theory to a real dataset, where ring
+    sizes come from the data rather than a fixed k.
+    """
+    if not ring_sizes:
+        return 0.0
+    total = 0.0
+    for k in ring_sizes:
+        m = k - ceil(theta * k)
+        total += sum(
+            comb(k, x) * comb(N - k, B - x) / comb(N, B)
+            for x in range(0, m + 1)
+            if 0 <= B - x <= N - k
+        )
+    return total / len(ring_sizes)
+
+
 def critical_budget_fraction(k: int, theta: float = 0.5) -> float:
     """
     Budget fraction at which expected per-ring evasion equals the tolerance,

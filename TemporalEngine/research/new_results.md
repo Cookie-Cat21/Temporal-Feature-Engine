@@ -12,6 +12,7 @@ single empirical study into an *observe → explain → attack → defend* arc.
 | B4 | **Improved DP** (count-primary beats baseline) | `dp_improved.py` | `results/dp_improved.csv`, `dp_improved.png` |
 | B5 | **Confidence intervals + scale + ring-size validation** | `stats_scale.py` | `results/stats_*.csv` |
 | B6 | **Learned GCN vs. WCC** robustness comparison | `gnn_baseline.py` | `results/gnn_vs_wcc.csv`, `gnn_vs_wcc.png` |
+| B7 | **Real-data readiness**: generalized model + drop-in loader | `realistic.py`, `real_data.py` | `results/realistic.csv`, `real_data_validation.csv` |
 
 ---
 
@@ -98,6 +99,24 @@ confirming the paper's recommendation that durable defense needs non-graph
 signals. *Caveat:* the residual magnitude depends on the synthetic amount
 distribution; treat it as a principle demonstration, not a guaranteed number on
 real data.
+
+## B7 — Real-data readiness (started)
+
+Real fraud rings have heterogeneous sizes, so the fixed-k model must generalize
+first. We added `predicted_recall_mixed(ring_sizes, N, B, theta)` — the coverage
+law averaged over a ring-size distribution — and validated it two ways:
+
+- **Heterogeneous generator** (`realistic.py`): 40 rings, sizes 3–15, N=362.
+  Mixed model vs measured: 40%→0.773/0.768, 60%→0.318/0.320, 80%→0.046/0.048.
+  **Max abs error 0.005.**
+- **Drop-in loader** (`real_data.py`): channel-agnostic CSV ingest (bipartite
+  user↔entity edges), connected-component rings, full-evasion sweep vs the mixed
+  model. End-to-end demo (1002 nodes, 40 rings): **max abs error 0.006.**
+
+The model is now ready for a real dataset. Remaining to *complete* B7: obtain
+IBM AMLSim or Elliptic2 (instructions + column mapping in `real_data.py`
+docstring), then `python real_data.py --csv <file>`. This step needs a dataset
+download (Kaggle auth / large file) — best done with the user in the loop.
 
 ---
 
