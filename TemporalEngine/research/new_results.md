@@ -13,6 +13,7 @@ single empirical study into an *observe → explain → attack → defend* arc.
 | B5 | **Confidence intervals + scale + ring-size validation** | `stats_scale.py` | `results/stats_*.csv` |
 | B6 | **Learned GCN vs. WCC** robustness comparison | `gnn_baseline.py` | `results/gnn_vs_wcc.csv`, `gnn_vs_wcc.png` |
 | B7 | **Real-data readiness**: generalized model + drop-in loader | `realistic.py`, `real_data.py` | `results/realistic.csv`, `real_data_validation.csv` |
+| B8 | **Certified robustness**: exact deterministic certificate | `certified.py` | `results/certified.csv` |
 
 ---
 
@@ -117,6 +118,31 @@ The model is now ready for a real dataset. Remaining to *complete* B7: obtain
 IBM AMLSim or Elliptic2 (instructions + column mapping in `real_data.py`
 docstring), then `python real_data.py --csv <file>`. This step needs a dataset
 download (Kaggle auth / large file) — best done with the user in the loop.
+
+## B8 — Certified robustness (exact, and it dominates smoothing)
+
+Learned detectors get only *probabilistic* certificates (randomized smoothing,
+Jia 2020). The structural detector admits an **exact, per-ring deterministic
+certificate**. Crucially, the naive size bound m = k−⌈θk⌉ is only an *upper*
+bound: under sparse sharing, removing a user can fragment the ring (survivors
+were bridged through the removed user), so the true radius is a **connectivity**
+property. We compute it exactly on each ring's bipartite graph:
+
+> **R_cert(ring) = largest r such that every r-user removal leaves a connected
+> component with ≥ ⌈θk⌉ users.**
+
+- **Sound by construction and verified:** worst-case recall over 300 random
+  attacks *at* the certified radius = **1.000**.
+- **Co-location density matters:** dense rings (shared hub) achieve the optimal
+  R_cert = m; sparse rings can fall below (k=12: 5 vs 6).
+- **Dominates smoothing:** exact radius (2–6 users, confidence 1.0) vs the
+  randomized-ablation certificate (ρ ≈ 2–3, probabilistic). Structure beats
+  noise for this detector.
+- Realistic population (40 rings, sizes 3–15): all certifiable, mean exact
+  radius 3.38 users.
+
+This is also an actionable defense signal: a ring's certified radius is a
+*confidence score* a SOC can act on, and it rewards dense co-location detection.
 
 ---
 

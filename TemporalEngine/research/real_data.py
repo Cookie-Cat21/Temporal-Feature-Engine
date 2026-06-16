@@ -76,6 +76,35 @@ def load_edges(path):
     return edges, fraud
 
 
+def load_ibm_aml(path, max_rows=None):
+    """
+    Adapter for the Kaggle IBM AML dataset (HI-Small_Trans.csv etc.).
+    Columns: Timestamp, From Bank, Account, To Bank, Account.1, Amount Received,
+             Receiving Currency, Amount Paid, Payment Currency, Payment Format,
+             Is Laundering.
+
+    Mapping: user = From "Account"; shared entity = counterparty "Account.1"
+    (two launderers transacting with the same counterparty are co-located). An
+    account is fraud if it appears in any Is-Laundering=1 transaction. We keep the
+    fraud-centred subgraph (edges whose source is a fraud account) so connected
+    components of fraud accounts form the candidate rings.
+    """
+    fraud = set()
+    rows = []
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for i, r in enumerate(reader):
+            if max_rows and i >= max_rows:
+                break
+            src, dst = r.get("Account"), r.get("Account.1")
+            launder = str(r.get("Is Laundering", "0")).strip() == "1"
+            rows.append((src, dst, launder))
+            if launder:
+                fraud.add(src); fraud.add(dst)
+    edges = [(src, f"acct:{dst}") for src, dst, _ in rows if src in fraud]
+    return edges, fraud
+
+
 def build_graph(edges):
     G = nx.Graph()
     for u, e in edges:
@@ -132,12 +161,19 @@ def full_evasion(edges, fraud_users, targets):
 
 def run(path, theta=0.5, n_trials=20):
     edges, fraud = load_edges(path)
+    return run_edges(edges, fraud, theta=theta, n_trials=n_trials)
+
+
+def run_edges(edges, fraud, theta=0.5, n_trials=20):
     G0 = build_graph(edges)
     gt = ground_truth_rings(G0, fraud)
     ring_sizes = [len(r) for r in gt]
     N = sum(ring_sizes)
     fraud_in_rings = set().union(*gt) if gt else set()
-    print(f"Loaded {path}: {G0.number_of_nodes()} nodes, {len(fraud)} fraud users, "
+    if not gt:
+        print("No rings (>=3 fraud users sharing an entity) found in this data.")
+        return []
+    print(f"{G0.number_of_nodes()} nodes, {len(fraud)} fraud users, "
           f"{len(gt)} rings (sizes {min(ring_sizes)}-{max(ring_sizes)}, N={N})")
     print(f"{'budget%':>8} {'measured':>10} {'mixed-model':>12} {'abs.err':>8}")
     rows = []
@@ -184,16 +220,23 @@ def save_csv(rows, path):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", type=str, default=None)
+    ap.add_argument("--ibm-aml", type=str, default=None,
+                    help="path to IBM AML HI-Small_Trans.csv (uses the adapter)")
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--theta", type=float, default=0.5)
     ap.add_argument("--trials", type=int, default=20)
     args = ap.parse_args()
 
     print("=== B7.2: coverage theorem on a loaded dataset ===")
-    path = args.csv
-    if args.demo or not path:
-        path = RESULTS_DIR / "demo_dataset.csv"
-        RESULTS_DIR.mkdir(exist_ok=True)
-        write_demo_csv(path)
-    rows = run(path, theta=args.theta, n_trials=args.trials)
+    if args.ibm_aml:
+        edges, fraud = load_ibm_aml(args.ibm_aml)
+        rows = run_edges(edges, fraud, theta=args.theta, n_trials=args.trials)
+    else:
+        path = args.csv
+        if args.demo or not path:
+            path = RESULTS_DIR / "demo_dataset.csv"
+            RESULTS_DIR.mkdir(exist_ok=True)
+            write_demo_csv(path)
+        edges, fraud = load_edges(path)
+        rows = run_edges(edges, fraud, theta=args.theta, n_trials=args.trials)
     save_csv(rows, RESULTS_DIR / "real_data_validation.csv")
